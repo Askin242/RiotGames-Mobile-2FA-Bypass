@@ -60,7 +60,7 @@ Main window:
 
 #### Option 1 — Download prebuilt release (recommended)
 
-- Go to the **Releases** section of this project.
+- Go to the [**Releases**](https://github.com/Askin242/RiotGames-Mobile-2FA-Bypass/releases/tag/v1.0.0) section of this project.
 - Download the latest archive for your platform.
 - Extract the contents somewhere on your machine.
 - Run the provided executable (for example `Riot2FA.exe`) to start the app.
