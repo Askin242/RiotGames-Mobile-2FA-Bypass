@@ -14,8 +14,7 @@
     <img src="https://img.shields.io/badge/status-Working-28A745?style=for-the-badge&labelColor=000000" />
   </p>
   <p align="center">
-    [![Watch the video](https://img.youtube.com/vi/f1bqPi2Ku9E/maxresdefault.jpg)](https://youtu.be/f1bqPi2Ku9E)
-
+    [![Demo CountPages alpha](https://share.gifyoutube.com/KzB6Gb.gif)](https://www.youtube.com/watch?v=ek1j272iAmc)
   </p>
 </div>
 
