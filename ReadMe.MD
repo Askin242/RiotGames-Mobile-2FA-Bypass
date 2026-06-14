@@ -1,7 +1,7 @@
 <div align="center">
   <h1 align="center">Riot Games Mobile 2FA Bypass</h1>
   <p align="center">
-    A desktop port of the Riot Games mobile 2FA app — manage your own Riot 2FA codes directly from your PC.
+    A desktop port of the Riot Games mobile 2FA app,manage your own Riot Mobile 2FA directly from your PC.
       <br />
     <br />
     <a href="https://github.com/Askin242/RiotGames-Mobile-2FA-Bypass/issues">⚠️ Report Bug</a>
@@ -22,7 +22,7 @@
 
 ### 🔍 Overview
 
-`Riot 2FA` is a desktop port of Riot's official mobile 2FA app. It lets you store and view the one-time passwords (TOTP codes) for your Riot Games account on your desktop instead of on your phone.
+`Riot 2FA` is a desktop port of Riot's official mobile 2FA app. It lets you enable, store and view the one-time passwords (TOTP codes) for your Riot Games account on your desktop instead of on your phone.
 
 It uses Riot's own login flow to fetch your 2FA secret, stores it locally on your machine, and continuously generates valid 2FA codes for any accounts you add, wich allow to queue ranked without using any mobile device.
 > All accounts secrets are stored in `%appdata%\Riot2FA\accounts.json`
@@ -30,7 +30,6 @@ It uses Riot's own login flow to fetch your 2FA secret, stores it locally on you
 ### ⚠️ Important warning
 
 - **You must already have 2FA enabled via email on your Riot account before you use this tool.**
-- This tool does not remove, disable, or bypass two-factor authentication; it only gives you another way to see the same codes that your authenticator app would show.
 - Only use this tool on accounts you own and control.
 
 ### ✨ Features
