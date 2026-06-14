@@ -15,7 +15,6 @@ from PyQt6.QtGui import QCursor
 
 from app.core import get_code
 
-
 class AccountCard(QFrame):
     remove_requested = pyqtSignal(str, str)
     copy_requested = pyqtSignal()
@@ -144,4 +143,3 @@ class AccountCard(QFrame):
         box.setDefaultButton(QMessageBox.StandardButton.No)
         if box.exec() == QMessageBox.StandardButton.Yes:
             self.remove_requested.emit(self.account_name, self.seed)
-

@@ -1,8 +1,33 @@
 from app.api.riot_api import (
     is_valid_jwt,
     fetch_riot_id,
+    fetch_mfa_factors,
+    is_email_mfa_enabled,
     enable_mfa,
     verify_mfa,
+    extract_puuid,
+    register_mfa_push_device,
+    respond_to_mfa,
+    mint_access_token,
+    SSO_COOKIE_NAMES,
+    parse_qr_login,
+    qr_session_info,
+    qr_approve,
 )
 
-__all__ = ["is_valid_jwt", "fetch_riot_id", "enable_mfa", "verify_mfa"]
+__all__ = [
+    "is_valid_jwt",
+    "fetch_riot_id",
+    "fetch_mfa_factors",
+    "is_email_mfa_enabled",
+    "enable_mfa",
+    "verify_mfa",
+    "extract_puuid",
+    "register_mfa_push_device",
+    "respond_to_mfa",
+    "mint_access_token",
+    "SSO_COOKIE_NAMES",
+    "parse_qr_login",
+    "qr_session_info",
+    "qr_approve",
+]

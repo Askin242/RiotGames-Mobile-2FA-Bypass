@@ -4,10 +4,8 @@ import hashlib
 import base64
 import urllib.parse
 
-
 PERIOD = 30
 DIGITS = 6
-
 
 def totp_sha256(seed_b32, period=PERIOD, digits=DIGITS, t=None):
     if t is None:
@@ -26,22 +24,23 @@ def totp_sha256(seed_b32, period=PERIOD, digits=DIGITS, t=None):
     code_int %= 10**digits
     return str(code_int).zfill(digits)
 
-
 def get_code(seed):
     return totp_sha256(seed)
 
-
 def extract_seed(s):
     s = s.strip()
-    if s.startswith("http://") or s.startswith("https://"):
+    if s.startswith(("http://", "https://", "otpauth://")):
         u = urllib.parse.urlparse(s)
         qs = urllib.parse.parse_qs(u.query)
-        if "seed" in qs and qs["seed"]:
-            return qs["seed"][0]
+
+        for key in ("seed", "secret"):
+            if qs.get(key):
+                return qs[key][0]
         parts = s.split("?", 1)
         if len(parts) > 1:
             for kv in parts[1].split("&"):
-                if kv.startswith("seed="):
-                    return kv.split("=", 1)[1]
+                for key in ("seed=", "secret="):
+                    if kv.startswith(key):
+                        return kv.split("=", 1)[1]
         return None
     return s or None

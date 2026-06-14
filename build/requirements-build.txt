@@ -1,0 +1,4 @@
+# Build-time tools (in addition to the app's requirements.txt).
+# Install the app deps first:  pip install -r requirements.txt
+pyinstaller>=6.0
+pyarmor>=8.0

@@ -1,9 +1,10 @@
 import os
 
+from app.core.paths import resource_path
+
 
 def load_stylesheet():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    path = os.path.join(base_dir, "assets", "style.qss")
+    path = resource_path(os.path.join("app", "assets", "style.qss"))
     try:
         with open(path, "r", encoding="utf-8") as f:
             return f.read()

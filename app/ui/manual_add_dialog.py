@@ -12,7 +12,6 @@ from PyQt6.QtWidgets import (
 
 from app.core import extract_seed
 
-
 class ManualAddDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -77,4 +76,3 @@ class ManualAddDialog(QDialog):
             return
         self.result_data = {"name": name, "seed": seed}
         self.accept()
-

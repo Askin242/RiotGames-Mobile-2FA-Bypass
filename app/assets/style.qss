@@ -80,6 +80,17 @@ QPushButton#addManualBtn {
 QPushButton#addManualBtn:hover {
     background-color: #1e1e2a;
 }
+QPushButton#qrBtn {
+    background-color: #16161e;
+    border: 1px solid #222230;
+    font-size: 17px;
+    padding: 9px 0;
+}
+QPushButton#qrBtn:hover {
+    background-color: #1e1e2a;
+    border-color: #3a6a8a;
+    color: #7ec8e3;
+}
 QLabel#titleLabel {
     font-size: 15px;
     font-weight: 600;
