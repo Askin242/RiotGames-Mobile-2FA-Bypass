@@ -31,7 +31,7 @@ hiddenimports = []
 # third-party dependency must be declared explicitly here.
 for pkg in (
     "firebase_messaging", "google.protobuf", "http_ece", "cryptography",
-    "cv2", "numpy", "requests", "websocket",
+    "cv2", "numpy", "requests",
 ):
     try:
         d, b, h = collect_all(pkg)
@@ -41,13 +41,18 @@ for pkg in (
     except Exception:
         pass
 hiddenimports += collect_submodules("firebase_messaging")
-# PyQt6 (Widgets only — no WebEngine, login now uses the system browser via CDP).
+# PyQt6 (incl. WebEngine for the embedded login) — adding these triggers
+# PyInstaller's PyQt6 hooks which bundle the Qt binaries + WebEngine runtime.
 hiddenimports += [
     "PyQt6.sip",
     "PyQt6.QtCore",
     "PyQt6.QtGui",
     "PyQt6.QtWidgets",
     "PyQt6.QtNetwork",
+    "PyQt6.QtWebChannel",
+    "PyQt6.QtPrintSupport",
+    "PyQt6.QtWebEngineCore",
+    "PyQt6.QtWebEngineWidgets",
 ]
 
 # The app's OWN modules are obfuscated too, so PyInstaller can't see them
@@ -75,12 +80,7 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],
-    excludes=[
-        "tkinter", "matplotlib", "pytest",
-        "PyQt6.QtWebEngineCore", "PyQt6.QtWebEngineWidgets",
-        "PyQt6.QtWebEngineQuick", "PyQt6.QtWebChannel", "PyQt6.QtQuick",
-        "PyQt6.QtQml", "PyQt6.QtPrintSupport",
-    ],
+    excludes=["tkinter", "matplotlib", "pytest"],
     noarchive=False,
 )
 

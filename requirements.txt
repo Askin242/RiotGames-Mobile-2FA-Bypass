@@ -1,6 +1,6 @@
 PyQt6
+PyQt6-WebEngine
 requests
-websocket-client
 firebase-messaging>=0.4.5
 opencv-python
 numpy

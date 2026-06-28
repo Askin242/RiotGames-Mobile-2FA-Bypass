@@ -57,8 +57,7 @@ Main window:
 
 - Windows 10 or newer (tested)
 - Python 3.10+ (only needed if running from source)
-- Microsoft Edge or Google Chrome installed (used for the login window)
-- Installed dependencies (PyQt6, requests, websocket-client)
+- Installed dependencies (PyQt6, PyQt6-WebEngine, requests)
 
 ---
 
@@ -107,7 +106,7 @@ For the absolute fewest false positives, first rebuild PyInstaller's bootloader 
 
 2. **Add an account using "Add via Login"**
    - Open the app and click **Add via Login**.
-   - A normal Edge/Chrome window opens — log in to your Riot account there.
+   - Log in to your Riot account in the embedded browser window.
    - After a successful login, the tool will attempt to enable or attach MFA and fetch the TOTP secret.
    - The account will appear in the list with a live 2FA code and timer.
 
