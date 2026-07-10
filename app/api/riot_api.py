@@ -155,13 +155,16 @@ _REAUTH_BODY = {
     "riot://riot.authenticator/session.auth",
 }
 
-def mint_access_token(sso_cookies):
-    """Mint a fresh RSO access token from stored SSO cookies (needs `ssid`).
+def mint_tokens(sso_cookies):
+    """Mint a fresh (access_token, id_token) pair from stored SSO cookies.
 
-    Returns the access token, or None if the session has expired (re-login needed).
+    Needs the persistent `ssid` cookie. Returns (None, None) if the session has
+    expired (re-login needed). The RSO authorization response returns both tokens
+    in the redirect URI fragment because `_REAUTH_BODY` asks for
+    `response_type: "token id_token"`.
     """
     if not sso_cookies or not sso_cookies.get("ssid"):
-        return None
+        return None, None
     session = requests.Session()
     for name, value in sso_cookies.items():
         if value:
@@ -176,10 +179,22 @@ def mint_access_token(sso_cookies):
     resp.raise_for_status()
     data = resp.json()
     if data.get("type") != "response":
-        return None
+        return None, None
     uri = (((data.get("response") or {}).get("parameters") or {}).get("uri")) or ""
-    match = re.search(r"access_token=([^&]+)", uri)
-    return match.group(1) if match else None
+    access = re.search(r"access_token=([^&]+)", uri)
+    id_tok = re.search(r"id_token=([^&]+)", uri)
+    return (
+        access.group(1) if access else None,
+        id_tok.group(1) if id_tok else None,
+    )
+
+
+def mint_access_token(sso_cookies):
+    """Mint a fresh RSO access token from stored SSO cookies (needs `ssid`).
+
+    Returns the access token, or None if the session has expired (re-login needed).
+    """
+    return mint_tokens(sso_cookies)[0]
 
 RSO_AUTH_HOST = "https://authenticate.riotgames.com"
 QR_SESSION_INFO_PATH = "/api/v1/session/info"
