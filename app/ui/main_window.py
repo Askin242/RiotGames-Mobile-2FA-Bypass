@@ -28,12 +28,10 @@ from app.core.paths import resource_path
 from app.version import __version__
 from app.api import (
     is_valid_jwt,
-    fetch_riot_id,
     fetch_mfa_factors,
     is_email_mfa_enabled,
     enable_mfa,
     verify_mfa,
-    extract_puuid,
     register_mfa_push_device,
     mint_access_token,
     parse_qr_login,
@@ -283,15 +281,13 @@ class MainWindow(QMainWindow):
             return
         cookies = dlg.cookies
         csrf = dlg.csrf_token
-        id_tok = dlg.id_token
-        if not csrf or not id_tok:
-            QMessageBox.warning(self, "Error", "Login OK but tokens could not be extracted.")
+        if not csrf or not cookies:
+            QMessageBox.warning(self, "Error", "Login OK but the session could not be captured.")
             return
 
-        try:
-            name = fetch_riot_id(cookies, csrf)
-        except Exception:
-            name = "Unknown"
+        name = dlg.riot_id or "Unknown"
+        puuid = dlg.puuid
+        bearer = dlg.id_token  # the account SPA's access token (may be None)
 
         try:
             factors = fetch_mfa_factors(cookies, csrf)
@@ -314,25 +310,25 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Enable MFA Failed", str(exc))
             return
 
-        try:
-            verify_mfa(id_tok, seed)
-        except Exception as exc:
-            QMessageBox.warning(
-                self,
-                "Verify Warning",
-                f"MFA enabled but verification failed:\n{exc}\n\nSeed saved anyway.",
-            )
-
         account = {"name": name, "seed": seed}
-        puuid = extract_puuid(id_tok)
         if puuid:
             account["puuid"] = puuid
-
         if dlg.sso_cookies.get("ssid"):
             account["sso"] = dlg.sso_cookies
 
         access_token = self._valid_access_token(account)
-        push_note = self._register_push(access_token, id_tok, puuid)
+        verify_tok = bearer or access_token
+        if verify_tok:
+            try:
+                verify_mfa(verify_tok, seed)
+            except Exception as exc:
+                QMessageBox.warning(
+                    self,
+                    "Verify Warning",
+                    f"MFA enabled but verification failed:\n{exc}\n\nSeed saved anyway.",
+                )
+
+        push_note = self._register_push(access_token, bearer, puuid)
 
         self.accounts.append(account)
         self._save_and_refresh()

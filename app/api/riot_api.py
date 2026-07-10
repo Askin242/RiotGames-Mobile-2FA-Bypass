@@ -48,7 +48,9 @@ def _riot_api_headers(csrf_token):
         "user-agent": _USER_AGENT,
     }
 
-def fetch_riot_id(cookies, csrf_token):
+def fetch_account_user(cookies, csrf_token):
+    """Raw `account/v1/user`. Authenticated by the account session cookie + csrf;
+    raises (401/403) when not signed in, so it doubles as a login probe."""
     resp = requests.get(
         "https://account.riotgames.com/api/account/v1/user",
         cookies=cookies,
@@ -56,8 +58,10 @@ def fetch_riot_id(cookies, csrf_token):
         timeout=15,
     )
     resp.raise_for_status()
-    data = resp.json()
-    alias = data.get("alias", {})
+    return resp.json()
+
+def riot_id_from_user(data):
+    alias = data.get("alias", {}) if isinstance(data, dict) else {}
     gn = alias.get("game_name") if alias else None
     tl = alias.get("tag_line") if alias else None
     if gn and tl:
@@ -65,6 +69,14 @@ def fetch_riot_id(cookies, csrf_token):
     if gn:
         return gn
     return data.get("username", data.get("sub", "Unknown"))
+
+def puuid_from_user(data):
+    if not isinstance(data, dict):
+        return None
+    return data.get("puuid") or data.get("sub")
+
+def fetch_riot_id(cookies, csrf_token):
+    return riot_id_from_user(fetch_account_user(cookies, csrf_token))
 
 def fetch_mfa_factors(cookies, csrf_token):
     """List the account's MFA factors (email, riotmobile, ...) and their status."""

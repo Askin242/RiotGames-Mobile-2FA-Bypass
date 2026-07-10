@@ -1,6 +1,9 @@
 from app.api.riot_api import (
     is_valid_jwt,
     fetch_riot_id,
+    fetch_account_user,
+    riot_id_from_user,
+    puuid_from_user,
     fetch_mfa_factors,
     is_email_mfa_enabled,
     enable_mfa,
@@ -18,6 +21,9 @@ from app.api.riot_api import (
 __all__ = [
     "is_valid_jwt",
     "fetch_riot_id",
+    "fetch_account_user",
+    "riot_id_from_user",
+    "puuid_from_user",
     "fetch_mfa_factors",
     "is_email_mfa_enabled",
     "enable_mfa",
