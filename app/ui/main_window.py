@@ -36,6 +36,7 @@ from app.api import (
     extract_puuid,
     register_mfa_push_device,
     mint_access_token,
+    mint_tokens,
     parse_qr_login,
     qr_session_info,
     qr_approve,
@@ -283,9 +284,24 @@ class MainWindow(QMainWindow):
             return
         cookies = dlg.cookies
         csrf = dlg.csrf_token
+        sso = dlg.sso_cookies or {}
         id_tok = dlg.id_token
-        if not csrf or not id_tok:
-            QMessageBox.warning(self, "Error", "Login OK but tokens could not be extracted.")
+
+        # The new account portal no longer exposes an id_token cookie — mint the
+        # id_token (and an access token) from the SSO session instead.
+        access_token = None
+        if not id_tok and sso.get("ssid"):
+            try:
+                access_token, id_tok = mint_tokens(sso)
+            except Exception:
+                pass
+
+        if not id_tok:
+            QMessageBox.warning(
+                self, "Error",
+                "Login OK but session tokens could not be obtained "
+                "(the Riot session may have changed).",
+            )
             return
 
         try:

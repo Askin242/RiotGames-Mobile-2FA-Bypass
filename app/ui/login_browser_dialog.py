@@ -1,4 +1,3 @@
-import re
 import uuid
 
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel
@@ -6,7 +5,7 @@ from PyQt6.QtCore import QTimer, QUrl
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
 
-from app.api import is_valid_jwt, SSO_COOKIE_NAMES
+from app.api import SSO_COOKIE_NAMES
 
 
 def _domain_matches(cookie_domain, host):
@@ -78,8 +77,10 @@ class LoginBrowserDialog(QDialog):
         name = bytes(cookie.name()).decode("utf-8", errors="replace")
         value = bytes(cookie.value()).decode("utf-8", errors="replace")
         self._all.append((cookie.domain(), name, value))
-        if name == "id_token":
-            QTimer.singleShot(300, self._try_detect)
+        # `sid` = the new account-portal session cookie; `ssid` = the SSO session
+        # we mint tokens from. Either arriving means we may now be logged in.
+        if name in ("sid", "ssid", "id_token"):
+            QTimer.singleShot(400, self._try_detect)
 
     def _cookies_for_host(self, host):
         relevant = [t for t in self._all if _domain_matches(t[0], host)]
@@ -99,35 +100,58 @@ class LoginBrowserDialog(QDialog):
     def _try_detect(self):
         if self._detected or self._page is None:
             return
-        id_tok = self._cookies_for_host("account.riotgames.com").get("id_token")
-        if not id_tok or not is_valid_jwt(id_tok):
-            return
-        base = self._page.url().toString().split("?")[0].split("#")[0].rstrip("/")
-        if base != "https://account.riotgames.com":
+        host = self._page.url().host()
+        acct = self._cookies_for_host("account.riotgames.com")
+        auth = self._cookies_for_host("auth.riotgames.com")
+        # The new Riot account portal (client `accountodactyl-prod`) no longer
+        # sets an `id_token` cookie. Login is done once we're back on the account
+        # site with its session cookie (`sid`) AND we hold the SSO `ssid` (which
+        # lets us mint the id_token/access_token that the old cookie used to give).
+        have_session = "sid" in acct or bool(acct.get("id_token"))
+        have_ssid = bool(auth.get("ssid"))
+        if host != "account.riotgames.com" or not have_session or not have_ssid:
             return
         self._detected = True
-        self.id_token = id_tok
         self.status.setText("  Login detected — extracting session...")
         self.status.setStyleSheet(
             "background-color:#0e1a0e; color:#55aa55; font-size:11px; padding-left:10px;"
         )
         self._page.toHtml(self._html_received)
 
-    def _html_received(self, html):
-        m = re.search(
-            r"""<meta\s+name=['"]csrf-token['"]\s+content=['"]([^'"]+)['"]""", html
-        )
-        if not m:
-            self._detected = False
-            self.status.setText("  Finishing sign-in, please wait...")
-            self.status.setStyleSheet(
-                "background-color:#1a1a0e; color:#aaaa55; font-size:11px; padding-left:10px;"
-            )
-            QTimer.singleShot(2000, self._try_detect)
-            return
-        self.csrf_token = m.group(1)
-        self.cookies = self._cookies_for_host("account.riotgames.com")
+    def _html_received(self, _html):
+        acct = self._cookies_for_host("account.riotgames.com")
+        self.cookies = acct
+        # id_token is minted later from the SSO cookies (no longer a cookie here).
+        self.id_token = acct.get("id_token")
         auth = self._cookies_for_host("auth.riotgames.com")
         self.sso_cookies = {k: auth[k] for k in SSO_COOKIE_NAMES if auth.get(k)}
         self.status.setText("  Success! Capturing session...")
-        QTimer.singleShot(150, self.accept)
+        # The real CSRF token lives in a <meta name="csrf-token"> tag that the SPA
+        # injects after render (NOT the a12l-csrf-prod cookie, which is a
+        # different value the API rejects). Read it from the live DOM, retrying
+        # until the SPA has injected it.
+        self._capture_csrf(0)
+
+    def _capture_csrf(self, attempt):
+        js = (
+            "(function(){var m=document.querySelector("
+            "'meta[name=\"csrf-token\"]');return m?m.getAttribute('content'):'';})()"
+        )
+        self._page.runJavaScript(js, lambda tok: self._csrf_captured(tok, attempt))
+
+    def _csrf_captured(self, tok, attempt):
+        if self._page is None:
+            return
+        if tok:
+            self.csrf_token = tok
+            QTimer.singleShot(100, self.accept)
+            return
+        if attempt < 10:
+            QTimer.singleShot(500, lambda: self._capture_csrf(attempt + 1))
+            return
+        # Last resort: the csrf cookie (works for some flows even if not ideal).
+        for name, value in self.cookies.items():
+            if "csrf" in name.lower():
+                self.csrf_token = value
+                break
+        QTimer.singleShot(100, self.accept)
