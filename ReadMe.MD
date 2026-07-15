@@ -1,5 +1,6 @@
 <div align="center">
   <h1 align="center">Riot Games Mobile 2FA Bypass</h1>
+  <h1 align="center">⚠️ Currently this tool is patched, I am working on an update, but I am not home till the 17th</h1>
   <p align="center">
     A desktop port of the Riot Games mobile 2FA app,manage your own Riot Mobile 2FA directly from your PC.
       <br />
