@@ -16,6 +16,7 @@ from app.api.riot_api import (
     parse_qr_login,
     qr_session_info,
     qr_approve,
+    fetch_new_csrf_token,
 )
 
 __all__ = [
@@ -36,4 +37,5 @@ __all__ = [
     "parse_qr_login",
     "qr_session_info",
     "qr_approve",
+    "fetch_new_csrf_token",
 ]

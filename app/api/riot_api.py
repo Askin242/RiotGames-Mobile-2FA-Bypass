@@ -36,17 +36,23 @@ _USER_AGENT = (
 
 def _riot_api_headers(csrf_token):
     return {
-        "accept": "application/json",
-        "accept-language": "en-US,en;q=0.9",
-        "content-type": "application/json",
-        "csrf-token": csrf_token,
-        "origin": "https://account.riotgames.com",
-        "referer": "https://account.riotgames.com/",
-        "sec-fetch-dest": "empty",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-origin",
-        "user-agent": _USER_AGENT,
-    }
+    'accept': 'application/json',
+    'accept-language': 'en-US,en;q=0.9',
+    'cache-control': 'no-cache',
+    'content-type': 'application/json',
+    'csrf-token': csrf_token,
+    'origin': 'https://account.riotgames.com',
+    'pragma': 'no-cache',
+    'priority': 'u=1, i',
+    'referer': 'https://account.riotgames.com/',
+    'sec-ch-ua': '"Not;A=Brand";v="8", "Chromium";v="150", "Brave";v="150"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Windows"',
+    'sec-fetch-dest': 'empty',
+    'sec-fetch-mode': 'cors',
+    'sec-fetch-site': 'same-origin',
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36',
+}
 
 def fetch_account_user(cookies, csrf_token):
     """Raw `account/v1/user`. Authenticated by the account session cookie + csrf;
@@ -97,6 +103,32 @@ def is_email_mfa_enabled(factors):
             return f.get("status") == "enabled"
     return False
 
+def fetch_new_csrf_token(cookies):
+    """Fetch a new CSRF token from the account page."""
+    resp = requests.get(
+        "https://account.riotgames.com/",
+        cookies=cookies,
+        headers={
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'accept-language': 'en-US,en;q=0.9',
+            'cache-control': 'no-cache',
+            'pragma': 'no-cache',
+            'priority': 'u=0, i',
+            'sec-ch-ua': '"Not;A=Brand";v="8", "Chromium";v="150", "Brave";v="150"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'none',
+            'sec-fetch-user': '?1',
+            'upgrade-insecure-requests': '1',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36',
+        },
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.text.split("<meta name='csrf-token' content='")[1].split("'")[0]
+
 def enable_mfa(cookies, csrf_token):
     resp = requests.post(
         "https://account.riotgames.com/api/mfa/v2/factors/riotmobile/enable",
@@ -114,7 +146,7 @@ def verify_mfa(id_token, seed):
             "Authorization": f"Bearer {id_token}",
             "Content-Type": "application/json",
         },
-        data=json.dumps({"device": "Riot 2FA Manager", "otp": get_code(seed)}),
+        data=json.dumps({"device": "Redmi Note 12 Pro", "otp": get_code(seed)}),
         timeout=15,
     )
     resp.raise_for_status()

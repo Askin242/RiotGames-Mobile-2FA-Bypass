@@ -37,6 +37,7 @@ from app.api import (
     parse_qr_login,
     qr_session_info,
     qr_approve,
+    fetch_new_csrf_token,
 )
 from app.ui.toast import Toast
 from app.ui.account_card import AccountCard
@@ -284,6 +285,11 @@ class MainWindow(QMainWindow):
         if not csrf or not cookies:
             QMessageBox.warning(self, "Error", "Login OK but the session could not be captured.")
             return
+
+        try:
+            csrf = fetch_new_csrf_token(cookies)
+        except Exception:
+            csrf = dlg.csrf_token
 
         name = dlg.riot_id or "Unknown"
         puuid = dlg.puuid

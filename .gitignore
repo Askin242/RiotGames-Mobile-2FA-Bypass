@@ -18,3 +18,9 @@ spike/
 *.har
 build/pyi-src/
 build/build.log
+
+# Local request captures / debug dumps (may contain live cookies + csrf)
+enable_mfa*.json
+dist_test/
+build/build_test.log
+*.rar
