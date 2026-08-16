@@ -57,7 +57,8 @@ Main window:
 
 - Windows 10 or newer (tested)
 - Python 3.10+ (only needed if running from source)
-- Installed dependencies (PyQt6, PyQt6-WebEngine, requests)
+- Installed dependencies (PyQt6, patchright, requests)
+  > The prebuilt `Riot2FA.exe` bundles its own browser — nothing else to install.
 
 ---
 
@@ -79,7 +80,13 @@ Main window:
    pip install -r requirements.txt
    ```
 
-4. Start the application:
+4. Download the browser used for login (one-time):
+
+   ```bash
+   patchright install chromium
+   ```
+
+5. Start the application:
 
    ```bash
    python main.py
@@ -106,7 +113,7 @@ For the absolute fewest false positives, first rebuild PyInstaller's bootloader 
 
 2. **Add an account using "Add via Login"**
    - Open the app and click **Add via Login**.
-   - Log in to your Riot account in the embedded browser window.
+   - Log in to your Riot account in the browser window that opens.
    - After a successful login, the tool will attempt to enable or attach MFA and fetch the TOTP secret.
    - The account will appear in the list with a live 2FA code and timer.
 
