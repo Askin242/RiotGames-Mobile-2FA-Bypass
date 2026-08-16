@@ -1,5 +1,5 @@
 PyQt6
-PyQt6-WebEngine
+patchright
 requests
 firebase-messaging>=0.4.5
 opencv-python

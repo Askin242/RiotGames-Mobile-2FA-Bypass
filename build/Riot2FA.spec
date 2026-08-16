@@ -31,7 +31,7 @@ hiddenimports = []
 # third-party dependency must be declared explicitly here.
 for pkg in (
     "firebase_messaging", "google.protobuf", "http_ece", "cryptography",
-    "cv2", "numpy", "requests",
+    "cv2", "numpy", "requests", "patchright", "greenlet", "pyee",
 ):
     try:
         d, b, h = collect_all(pkg)
@@ -41,19 +41,46 @@ for pkg in (
     except Exception:
         pass
 hiddenimports += collect_submodules("firebase_messaging")
-# PyQt6 (incl. WebEngine for the embedded login) — adding these triggers
-# PyInstaller's PyQt6 hooks which bundle the Qt binaries + WebEngine runtime.
+hiddenimports += collect_submodules("patchright")
+
+# PyQt6 (Widgets only — login uses Patchright's Chromium now, not WebEngine).
 hiddenimports += [
     "PyQt6.sip",
     "PyQt6.QtCore",
     "PyQt6.QtGui",
     "PyQt6.QtWidgets",
     "PyQt6.QtNetwork",
-    "PyQt6.QtWebChannel",
-    "PyQt6.QtPrintSupport",
-    "PyQt6.QtWebEngineCore",
-    "PyQt6.QtWebEngineWidgets",
 ]
+
+# Patchright's Node driver (node.exe + package/cli.js) — bundle the whole folder
+# so the frozen app can spawn it. collect_all above may miss the non-.py driver.
+import patchright  # noqa: E402
+
+_pw_dir = os.path.dirname(patchright.__file__)
+datas.append((os.path.join(_pw_dir, "driver"), os.path.join("patchright", "driver")))
+
+# Patchright's Chromium (headed — needed for the login captcha). Detect the exact
+# revision Patchright uses and bundle just that browser under ms-playwright/,
+# which PLAYWRIGHT_BROWSERS_PATH points at in patchright_login._use_bundled_chromium.
+import subprocess as _sp
+
+try:
+    _exe = _sp.check_output(
+        [__import__("sys").executable, "-c",
+         "from patchright.sync_api import sync_playwright;"
+         "p=sync_playwright().start();print(p.chromium.executable_path);p.stop()"],
+        text=True,
+    ).strip().splitlines()[-1]
+    _cdir = _exe
+    while os.path.basename(_cdir) and not os.path.basename(_cdir).startswith("chromium-"):
+        _cdir = os.path.dirname(_cdir)
+    _ms_root = os.path.dirname(_cdir)
+    datas.append((_cdir, os.path.join("ms-playwright", os.path.basename(_cdir))))
+    for _ff in __import__("glob").glob(os.path.join(_ms_root, "ffmpeg-*")):
+        datas.append((_ff, os.path.join("ms-playwright", os.path.basename(_ff))))
+    print("[spec] bundling Chromium:", os.path.basename(_cdir))
+except Exception as _e:
+    print("[spec] WARNING: could not locate Patchright Chromium:", _e)
 
 # The app's OWN modules are obfuscated too, so PyInstaller can't see them
 # imported -- declare every app submodule (and the package) explicitly.
@@ -80,7 +107,12 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],
-    excludes=["tkinter", "matplotlib", "pytest"],
+    excludes=[
+        "tkinter", "matplotlib", "pytest",
+        "PyQt6.QtWebEngineCore", "PyQt6.QtWebEngineWidgets",
+        "PyQt6.QtWebEngineQuick", "PyQt6.QtWebChannel", "PyQt6.QtQuick",
+        "PyQt6.QtQml",
+    ],
     noarchive=False,
 )
 

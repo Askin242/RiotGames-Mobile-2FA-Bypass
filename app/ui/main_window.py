@@ -24,6 +24,7 @@ from PyQt6.QtGui import QIcon
 from app.core import load_accounts, save_accounts, PERIOD
 from app.core.fcm_service import FcmService
 from app.core import updater
+from app.core import patchright_login
 from app.core.paths import resource_path
 from app.version import __version__
 from app.api import (
@@ -38,11 +39,13 @@ from app.api import (
     qr_session_info,
     qr_approve,
     fetch_new_csrf_token,
+    fetch_account_user,
+    riot_id_from_user,
+    puuid_from_user,
 )
 from app.ui.toast import Toast
 from app.ui.account_card import AccountCard
 from app.ui.manual_add_dialog import ManualAddDialog
-from app.ui.login_browser_dialog import LoginBrowserDialog
 from app.ui.mfa_prompt_dialog import MfaPromptDialog
 from app.ui.qr_scanner_dialog import QrScannerDialog
 from app.ui.qr_confirm_dialog import QrConfirmDialog
@@ -52,6 +55,7 @@ QR_ICON_PATH = resource_path(os.path.join("images", "qr.png"))
 
 class MainWindow(QMainWindow):
     _update_found = pyqtSignal(dict)
+    _login_result = pyqtSignal(dict)
 
     def __init__(self):
         super().__init__()
@@ -126,6 +130,8 @@ class MainWindow(QMainWindow):
         self.fcm.start()
 
         self._update_found.connect(self._on_update_found)
+        self._login_result.connect(self._on_login_result)
+        self._login_busy = False
         threading.Thread(target=self._check_update, daemon=True).start()
 
     def _check_update(self):
@@ -277,68 +283,125 @@ class MainWindow(QMainWindow):
         prompt.activateWindow()
 
     def _add_via_login(self):
-        dlg = LoginBrowserDialog(self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
+        if self._login_busy:
             return
-        cookies = dlg.cookies
-        csrf = dlg.csrf_token
-        if not csrf or not cookies:
-            QMessageBox.warning(self, "Error", "Login OK but the session could not be captured.")
+        self._login_busy = True
+        self.toast.popup("A browser window opened — sign in there to continue")
+        threading.Thread(target=self._login_worker, daemon=True).start()
+
+    def _login_worker(self):
+        try:
+            self._run_login()
+        except Exception as exc:  # never leave the button stuck busy
+            self._login_result.emit({"kind": "error", "title": "Login Failed", "text": str(exc)})
+
+    def _run_login(self):
+        """Runs off the GUI thread: drive the stealth browser, then build the account."""
+        try:
+            data = patchright_login.login()
+        except Exception as exc:
+            self._login_result.emit({"kind": "error", "title": "Login Failed", "text": str(exc)})
+            return
+        if not data:
+            self._login_result.emit({"kind": "cancelled"})
+            return
+
+        cookies = data.get("cookies") or {}
+        if not cookies:
+            self._login_result.emit(
+                {"kind": "error", "title": "Error", "text": "Login OK but the session could not be captured."}
+            )
             return
 
         try:
             csrf = fetch_new_csrf_token(cookies)
         except Exception:
-            csrf = dlg.csrf_token
+            csrf = data.get("csrf")
+        if not csrf:
+            self._login_result.emit(
+                {"kind": "error", "title": "Error", "text": "Login OK but the CSRF token could not be read."}
+            )
+            return
 
-        name = dlg.riot_id or "Unknown"
-        puuid = dlg.puuid
-        bearer = dlg.id_token  # the account SPA's access token (may be None)
+        puuid = None
+        try:
+            user = fetch_account_user(cookies, csrf)
+            name = riot_id_from_user(user) or "Unknown"
+            puuid = puuid_from_user(user)
+        except Exception:
+            name = "Unknown"
+        bearer = None
 
         try:
             factors = fetch_mfa_factors(cookies, csrf)
         except Exception:
             factors = None
         if factors is not None and not is_email_mfa_enabled(factors):
-            QMessageBox.warning(
-                self,
-                "Email 2FA required",
-                "You must enable email-based Multi-Factor Authentication on your "
-                "Riot account before you can add it here.\n\nTurn it on at "
-                "account.riotgames.com (Security → Multi-factor authentication), "
-                "then try again.",
-            )
+            self._login_result.emit({
+                "kind": "error",
+                "title": "Email 2FA required",
+                "text": (
+                    "You must enable email-based Multi-Factor Authentication on your "
+                    "Riot account before you can add it here.\n\nTurn it on at "
+                    "account.riotgames.com (Security → Multi-factor authentication), "
+                    "then try again."
+                ),
+            })
             return
 
         try:
             seed = enable_mfa(cookies, csrf)
         except Exception as exc:
-            QMessageBox.critical(self, "Enable MFA Failed", str(exc))
+            self._login_result.emit({"kind": "error", "title": "Enable MFA Failed", "text": str(exc)})
             return
 
         account = {"name": name, "seed": seed}
         if puuid:
             account["puuid"] = puuid
-        if dlg.sso_cookies.get("ssid"):
-            account["sso"] = dlg.sso_cookies
+        sso = data.get("sso") or {}
+        access_token = None
+        if sso.get("ssid"):
+            account["sso"] = sso
+            try:
+                access_token = mint_access_token(sso)
+            except Exception:
+                access_token = None
+            if access_token:
+                account["access_token"] = access_token
 
-        access_token = self._valid_access_token(account)
+        warn = None
         verify_tok = bearer or access_token
         if verify_tok:
             try:
                 verify_mfa(verify_tok, seed)
             except Exception as exc:
-                QMessageBox.warning(
-                    self,
-                    "Verify Warning",
-                    f"MFA enabled but verification failed:\n{exc}\n\nSeed saved anyway.",
-                )
+                warn = f"MFA enabled but verification failed:\n{exc}\n\nSeed saved anyway."
 
         push_note = self._register_push(access_token, bearer, puuid)
 
-        self.accounts.append(account)
+        self._login_result.emit({
+            "kind": "success",
+            "account": account,
+            "name": name,
+            "warn": warn,
+            "push_note": push_note,
+        })
+
+    def _on_login_result(self, result):
+        self._login_busy = False
+        kind = result.get("kind")
+        if kind == "cancelled":
+            return
+        if kind == "error":
+            QMessageBox.warning(self, result.get("title", "Error"), result.get("text", ""))
+            return
+        if result.get("warn"):
+            QMessageBox.warning(self, "Verify Warning", result["warn"])
+        self.accounts.append(result["account"])
         self._save_and_refresh()
-        QMessageBox.information(self, "Success", f"2FA added for {name}{push_note}")
+        QMessageBox.information(
+            self, "Success", f"2FA added for {result['name']}{result['push_note']}"
+        )
 
     def _register_push(self, access_token, id_tok, puuid):
         """Register this account's FCM device so logins push here. Best-effort."""
