@@ -15,7 +15,12 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 from firebase_messaging import FcmPushClient, FcmRegisterConfig
 
-from app.core.storage import load_fcm_credentials, save_fcm_credentials
+from app.core.storage import (
+    load_fcm_credentials,
+    save_fcm_credentials,
+    load_persistent_ids,
+    save_persistent_ids,
+)
 
 FIREBASE_PROJECT_ID = "leagueconnect-1f13a"
 FIREBASE_APP_ID = "1:595870631183:android:cdbf60becd73557e"
@@ -43,6 +48,7 @@ class FcmService(QObject):
         self._client = None
         self._fcm_token = None
         self._token_event = threading.Event()
+        self._persistent_ids = load_persistent_ids()
 
     @property
     def fcm_token(self):
@@ -99,6 +105,7 @@ class FcmService(QObject):
                 config,
                 credentials=load_fcm_credentials(),
                 credentials_updated_callback=self._on_credentials_updated,
+                received_persistent_ids=list(self._persistent_ids),
             )
 
             last_exc = None
@@ -131,6 +138,12 @@ class FcmService(QObject):
         save_fcm_credentials(creds)
 
     def _on_notification(self, notification, persistent_id, obj):
+        if persistent_id:
+            self._persistent_ids.append(persistent_id)
+            try:
+                save_persistent_ids(self._persistent_ids)
+            except Exception:
+                pass
 
         data = notification.get("data", notification) if notification else {}
         self.push_received.emit(dict(data))

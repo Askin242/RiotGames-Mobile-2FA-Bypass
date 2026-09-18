@@ -260,6 +260,15 @@ class MainWindow(QMainWindow):
 
             return
 
+        if self._push_is_stale(data):
+            return
+
+        suuid = data.get("suuid")
+        if suuid and any(
+            p.push.get("suuid") == suuid for p in self._active_prompts
+        ):
+            return
+
         self.tray.showMessage(
             "Riot login attempt",
             f"Approve or deny the login for {account.get('name', 'your account')}.",
@@ -281,6 +290,16 @@ class MainWindow(QMainWindow):
         prompt.show()
         prompt.raise_()
         prompt.activateWindow()
+
+    _PUSH_TTL_SECONDS = 180
+
+    def _push_is_stale(self, data):
+        attempted_at = data.get("attempted_at")
+        try:
+            ts = int(attempted_at) / 1000.0
+        except (TypeError, ValueError):
+            return False
+        return (time.time() - ts) > self._PUSH_TTL_SECONDS
 
     def _add_via_login(self):
         if self._login_busy:
