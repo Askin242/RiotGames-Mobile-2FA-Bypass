@@ -29,6 +29,7 @@ from app.core.paths import resource_path
 from app.version import __version__
 from app.api import (
     is_valid_jwt,
+    describe_exception,
     fetch_mfa_factors,
     is_email_mfa_enabled,
     enable_mfa,
@@ -49,6 +50,7 @@ from app.ui.manual_add_dialog import ManualAddDialog
 from app.ui.mfa_prompt_dialog import MfaPromptDialog
 from app.ui.qr_scanner_dialog import QrScannerDialog
 from app.ui.qr_confirm_dialog import QrConfirmDialog
+from app.ui.error_dialog import show_error
 
 ICON_PATH = resource_path(os.path.join("images", "icon.png"))
 QR_ICON_PATH = resource_path(os.path.join("images", "qr.png"))
@@ -312,14 +314,21 @@ class MainWindow(QMainWindow):
         try:
             self._run_login()
         except Exception as exc:  # never leave the button stuck busy
-            self._login_result.emit({"kind": "error", "title": "Login Failed", "text": str(exc)})
+            self._login_result.emit(self._error_result("Login Failed", str(exc), exc))
+
+    @staticmethod
+    def _error_result(title, text, exc=None):
+        result = {"kind": "error", "title": title, "text": text}
+        if exc is not None:
+            result["details"] = describe_exception(exc)
+        return result
 
     def _run_login(self):
         """Runs off the GUI thread: drive the stealth browser, then build the account."""
         try:
             data = patchright_login.login()
         except Exception as exc:
-            self._login_result.emit({"kind": "error", "title": "Login Failed", "text": str(exc)})
+            self._login_result.emit(self._error_result("Login Failed", str(exc), exc))
             return
         if not data:
             self._login_result.emit({"kind": "cancelled"})
@@ -371,7 +380,7 @@ class MainWindow(QMainWindow):
         try:
             seed = enable_mfa(cookies, csrf)
         except Exception as exc:
-            self._login_result.emit({"kind": "error", "title": "Enable MFA Failed", "text": str(exc)})
+            self._login_result.emit(self._error_result("Enable MFA Failed", str(exc), exc))
             return
 
         account = {"name": name, "seed": seed}
@@ -412,7 +421,12 @@ class MainWindow(QMainWindow):
         if kind == "cancelled":
             return
         if kind == "error":
-            QMessageBox.warning(self, result.get("title", "Error"), result.get("text", ""))
+            show_error(
+                self,
+                result.get("title", "Error"),
+                result.get("text", ""),
+                details=result.get("details", ""),
+            )
             return
         if result.get("warn"):
             QMessageBox.warning(self, "Verify Warning", result["warn"])
@@ -548,18 +562,15 @@ class MainWindow(QMainWindow):
                 self, "Signed in", f"Approved the QR sign-in for {account.get('name')}."
             )
         else:
-            QMessageBox.warning(
-                self, "Sign-in not confirmed", f"Riot returned: {result}"
+            show_error(
+                self,
+                "Sign-in not confirmed",
+                "Riot did not confirm the sign-in.",
+                details=f"Riot returned:\n{result}",
             )
 
     def _qr_warn(self, title, exc):
-        detail = str(exc)
-        try:
-            if hasattr(exc, "response") and exc.response is not None:
-                detail = f"HTTP {exc.response.status_code}: {exc.response.text[:300]}"
-        except Exception:
-            pass
-        QMessageBox.warning(self, title, detail)
+        show_error(self, title, str(exc), exc=exc)
 
     def _add_manually(self):
         dlg = ManualAddDialog(self)

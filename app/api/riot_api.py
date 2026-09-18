@@ -6,6 +6,7 @@ import base64
 import requests
 
 from app.core.auth_totp import get_code
+from app.core.errors import RiotApiError
 
 def decode_jwt_payload(token):
     try:
@@ -137,7 +138,18 @@ def enable_mfa(cookies, csrf_token):
         timeout=15,
     )
     resp.raise_for_status()
-    return resp.json()["secret"]
+    try:
+        secret = resp.json().get("secret")
+    except ValueError:
+        secret = None
+    if not secret:
+        raise RiotApiError(
+            "Riot returned no MFA secret — Riot Mobile MFA is likely already "
+            "enabled on this account. Disable it, then re-add. (Open details "
+            "for Riot's exact reply.)",
+            response=resp,
+        )
+    return secret
 
 def verify_mfa(id_token, seed):
     resp = requests.post(

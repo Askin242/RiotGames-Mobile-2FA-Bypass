@@ -180,6 +180,33 @@ QPushButton#dialogCancelBtn {
 QPushButton#dialogCancelBtn:hover {
     background-color: #16161e;
 }
+QPushButton#detailsToggleBtn {
+    background: transparent;
+    border: none;
+    color: #7ec8e3;
+    padding: 2px 0;
+    font-size: 11px;
+    text-align: left;
+}
+QPushButton#detailsToggleBtn:hover {
+    color: #a5dcef;
+}
+QLabel#errorMessage {
+    color: #c8c8d4;
+    font-size: 12px;
+}
+QLabel#contactLabel {
+    font-size: 11px;
+    color: #666677;
+}
+QPlainTextEdit#detailsBox {
+    background-color: #0a0a0e;
+    border: 1px solid #222230;
+    border-radius: 6px;
+    color: #b8b8c8;
+    selection-background-color: #1e3a5a;
+    padding: 6px;
+}
 QPushButton#menuBtn {
     background: transparent;
     border: none;

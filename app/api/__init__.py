@@ -18,8 +18,11 @@ from app.api.riot_api import (
     qr_approve,
     fetch_new_csrf_token,
 )
+from app.core.errors import RiotApiError, describe_exception
 
 __all__ = [
+    "RiotApiError",
+    "describe_exception",
     "is_valid_jwt",
     "fetch_riot_id",
     "fetch_account_user",
