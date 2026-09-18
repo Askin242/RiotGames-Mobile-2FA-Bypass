@@ -60,33 +60,81 @@ def check_for_update(timeout=8):
         return None
 
 
-def apply_exe_update(asset_url):
-    """Download the new exe and swap it via a helper batch, then exit.
+def download_update(asset_url, progress_cb=None, timeout=120):
+    """Download the new exe next to the current one. Returns the temp path.
 
-    Only valid for a frozen Windows build. Raises on download failure.
+    `progress_cb(done_bytes, total_bytes)` is called as bytes arrive (total is
+    0 when the server sends no Content-Length). Raises on failure.
     """
     target = os.path.abspath(sys.argv[0])
     new_path = target + ".new"
-    with requests.get(asset_url, stream=True, timeout=120) as resp:
+    with requests.get(asset_url, stream=True, timeout=timeout) as resp:
         resp.raise_for_status()
+        total = int(resp.headers.get("Content-Length") or 0)
+        done = 0
         with open(new_path, "wb") as out:
             for chunk in resp.iter_content(65536):
+                if not chunk:
+                    continue
                 out.write(chunk)
+                done += len(chunk)
+                if progress_cb:
+                    progress_cb(done, total)
+    if total and done < total:
+        try:
+            os.remove(new_path)
+        except OSError:
+            pass
+        raise IOError(f"Download incomplete ({done} of {total} bytes).")
+    return new_path
 
+
+# Env vars the PyInstaller onefile bootloader sets in a running app to tell a
+# re-executed copy which temp dir it already unpacked into. They MUST be cleared
+# before relaunching the freshly-swapped exe, or its bootloader trusts this
+# process's (about-to-be-deleted) dir and dies with "Failed to load python312.dll".
+# 6.x uses the _PYI_* names; _MEIPASS2 is kept for older builds.
+_PYI_HANDOFF_VARS = (
+    "_MEIPASS2",
+    "_PYI_APPLICATION_HOME_DIR",
+    "_PYI_ARCHIVE_FILE",
+    "_PYI_PARENT_PROCESS_LEVEL",
+    "_PYI_SPLASH_IPC",
+)
+
+
+def launch_swap(new_path):
+    """Spawn a hidden helper that waits for this app to exit, swaps in the new
+    exe and relaunches it. The caller should quit right after calling this.
+    """
+    target = os.path.abspath(sys.argv[0])
     bat_path = target + ".update.bat"
+    unset = "".join(f'set "{name}="\r\n' for name in _PYI_HANDOFF_VARS)
     script = (
         "@echo off\r\n"
-        ":wait\r\n"
-        "timeout /t 1 /nobreak >nul\r\n"
+        f"{unset}"
+        ":waitdel\r\n"
+        "ping 127.0.0.1 -n 2 >nul\r\n"
         f'del "{target}" >nul 2>&1\r\n'
-        f'if exist "{target}" goto wait\r\n'
-        f'move /y "{new_path}" "{target}" >nul\r\n'
+        f'if exist "{target}" goto waitdel\r\n'
+        ":domove\r\n"
+        f'move /y "{new_path}" "{target}" >nul 2>&1\r\n'
+        f'if not exist "{target}" ( ping 127.0.0.1 -n 2 >nul & goto domove )\r\n'
         f'start "" "{target}"\r\n'
         'del "%~f0"\r\n'
     )
     with open(bat_path, "w") as out:
         out.write(script)
 
-    creationflags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-    subprocess.Popen(["cmd", "/c", bat_path], creationflags=creationflags, close_fds=True)
-    sys.exit(0)
+    env = dict(os.environ)
+    for name in list(env):
+        if name in _PYI_HANDOFF_VARS or name.startswith("_PYI"):
+            env.pop(name, None)
+
+    CREATE_NO_WINDOW = 0x08000000
+    subprocess.Popen(
+        ["cmd", "/c", bat_path],
+        creationflags=CREATE_NO_WINDOW,
+        close_fds=True,
+        env=env,
+    )

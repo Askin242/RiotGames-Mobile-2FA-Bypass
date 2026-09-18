@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QSystemTrayIcon,
     QMenu,
     QApplication,
+    QProgressDialog,
 )
 from PyQt6.QtCore import Qt, QTimer, QSize, pyqtSignal
 from PyQt6.QtGui import QIcon
@@ -57,10 +58,16 @@ from app.ui.share_dialog import ShareCodeDialog
 ICON_PATH = resource_path(os.path.join("images", "icon.png"))
 QR_ICON_PATH = resource_path(os.path.join("images", "qr.png"))
 
+class _UpdateCancelled(Exception):
+    """Raised inside the download loop when the user cancels the update."""
+
 class MainWindow(QMainWindow):
     _update_found = pyqtSignal(dict)
     _login_result = pyqtSignal(dict)
     _import_result = pyqtSignal(dict)
+    _update_progress = pyqtSignal(int, int)
+    _update_ready = pyqtSignal(str)
+    _update_error = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -144,6 +151,11 @@ class MainWindow(QMainWindow):
         self._update_found.connect(self._on_update_found)
         self._login_result.connect(self._on_login_result)
         self._import_result.connect(self._on_import_result)
+        self._update_progress.connect(self._on_update_progress)
+        self._update_ready.connect(self._on_update_ready)
+        self._update_error.connect(self._on_update_error)
+        self._progress = None
+        self._update_cancelled = False
         self._login_busy = False
         threading.Thread(target=self._check_update, daemon=True).start()
 
@@ -164,13 +176,92 @@ class MainWindow(QMainWindow):
         if reply != QMessageBox.StandardButton.Yes:
             return
         if updater.is_frozen() and info.get("asset_url"):
-            try:
-                self.fcm.stop()
-                updater.apply_exe_update(info["asset_url"])
-                return
-            except Exception:
-                pass
+            self._begin_update(info["asset_url"])
+            return
         webbrowser.open(info["url"])
+
+    def _begin_update(self, asset_url):
+        self._update_cancelled = False
+        self._progress = QProgressDialog("Downloading update…", "Cancel", 0, 100, self)
+        self._progress.setWindowTitle("Updating")
+        self._progress.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self._progress.setMinimumDuration(0)
+        self._progress.setAutoReset(False)
+        self._progress.setAutoClose(False)
+        self._progress.canceled.connect(self._cancel_update)
+        self._progress.setValue(0)
+        threading.Thread(
+            target=self._update_worker, args=(asset_url,), daemon=True
+        ).start()
+
+    def _update_worker(self, asset_url):
+        last = -1
+
+        def cb(done, total):
+            nonlocal last
+            if self._update_cancelled:
+                raise _UpdateCancelled()
+            pct = int(done * 100 / total) if total else -1
+            if pct != last:
+                last = pct
+                self._update_progress.emit(done, total)
+
+        try:
+            new_path = updater.download_update(asset_url, progress_cb=cb)
+        except _UpdateCancelled:
+            return
+        except Exception as exc:
+            self._update_error.emit(describe_exception(exc))
+            return
+        self._update_ready.emit(new_path)
+
+    def _on_update_progress(self, done, total):
+        if self._progress is None:
+            return
+        if total > 0:
+            self._progress.setMaximum(100)
+            self._progress.setValue(int(done * 100 / total))
+            self._progress.setLabelText(
+                f"Downloading update…  {done / 1048576:.1f} / {total / 1048576:.1f} MB"
+            )
+        else:
+            self._progress.setMaximum(0)  # indeterminate
+
+    def _on_update_ready(self, new_path):
+        if self._progress is not None:
+            self._progress.setMaximum(100)
+            self._progress.setValue(100)
+            self._progress.setCancelButton(None)
+            self._progress.setLabelText("Installing… the app will restart.")
+        try:
+            updater.launch_swap(new_path)
+        except Exception as exc:
+            if self._progress is not None:
+                self._progress.close()
+                self._progress = None
+            show_error(self, "Update failed", "Could not start the installer.", exc=exc)
+            return
+        self.fcm.stop()
+        self.tray.hide()
+        QApplication.instance().quit()
+
+    def _on_update_error(self, details):
+        if self._progress is not None:
+            self._progress.close()
+            self._progress = None
+        show_error(
+            self,
+            "Update failed",
+            "The update could not be downloaded. You can try again, or download "
+            "it manually from the releases page.",
+            details=details,
+        )
+
+    def _cancel_update(self):
+        self._update_cancelled = True
+        if self._progress is not None:
+            self._progress.close()
+            self._progress = None
 
     def _setup_tray(self):
         icon = QIcon(ICON_PATH)
