@@ -70,6 +70,12 @@ Main window:
 - Download `Riot2FA.exe`.
 - Run it. The app checks for updates on launch and can update itself.
 
+> **Every release is built by GitHub Actions from this public source** — not on a
+> developer's machine — so you can audit exactly how the binary was produced.
+> Each release includes `Riot2FA.exe.sha256` (verify with
+> `Get-FileHash Riot2FA.exe -Algorithm SHA256`) and a signed build-provenance
+> attestation you can check with `gh attestation verify Riot2FA.exe --repo Askin242/RiotGames-Mobile-2FA-Bypass`.
+
 #### Option 2 — Run from source
 
 1. Install Python 3.10+.
@@ -102,6 +108,8 @@ python build/build.py          # -> dist/Riot2FA.exe
 ```
 
 For the absolute fewest false positives, first rebuild PyInstaller's bootloader with GCC — see [`build/BOOTLOADER.md`](build/BOOTLOADER.md).
+
+Releases are normally cut by CI: push a tag matching `app/version.py` (e.g. `git tag v2.1.1 && git push origin v2.1.1`) and [`.github/workflows/build.yml`](.github/workflows/build.yml) builds `Riot2FA.exe`, attaches its checksum, records a provenance attestation, and publishes the release.
 
 ---
 
