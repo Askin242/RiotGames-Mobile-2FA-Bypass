@@ -22,6 +22,7 @@ from PyQt6.QtCore import Qt, QTimer, QSize, pyqtSignal
 from PyQt6.QtGui import QIcon
 
 from app.core import load_accounts, save_accounts, PERIOD
+from app.core.share import export_account, import_account, ShareError
 from app.core.fcm_service import FcmService
 from app.core import updater
 from app.core import patchright_login
@@ -51,6 +52,7 @@ from app.ui.mfa_prompt_dialog import MfaPromptDialog
 from app.ui.qr_scanner_dialog import QrScannerDialog
 from app.ui.qr_confirm_dialog import QrConfirmDialog
 from app.ui.error_dialog import show_error
+from app.ui.share_dialog import ShareCodeDialog
 
 ICON_PATH = resource_path(os.path.join("images", "icon.png"))
 QR_ICON_PATH = resource_path(os.path.join("images", "qr.png"))
@@ -58,6 +60,7 @@ QR_ICON_PATH = resource_path(os.path.join("images", "qr.png"))
 class MainWindow(QMainWindow):
     _update_found = pyqtSignal(dict)
     _login_result = pyqtSignal(dict)
+    _import_result = pyqtSignal(dict)
 
     def __init__(self):
         super().__init__()
@@ -92,6 +95,13 @@ class MainWindow(QMainWindow):
         b2.setFixedWidth(120)
         b2.clicked.connect(self._add_manually)
         hdr.addWidget(b2)
+        hdr.addSpacing(6)
+        b3 = QPushButton("Import")
+        b3.setObjectName("addManualBtn")
+        b3.setFixedWidth(80)
+        b3.setToolTip("Import an account from a share code")
+        b3.clicked.connect(self._import_account)
+        hdr.addWidget(b3)
         hdr.addSpacing(6)
         bqr = QPushButton()
         bqr.setObjectName("qrBtn")
@@ -133,6 +143,7 @@ class MainWindow(QMainWindow):
 
         self._update_found.connect(self._on_update_found)
         self._login_result.connect(self._on_login_result)
+        self._import_result.connect(self._on_import_result)
         self._login_busy = False
         threading.Thread(target=self._check_update, daemon=True).start()
 
@@ -224,6 +235,7 @@ class MainWindow(QMainWindow):
                 card = AccountCard(acct["name"], acct["seed"])
                 card.remove_requested.connect(self._remove_account)
                 card.copy_requested.connect(lambda: self.toast.popup("Copied to clipboard"))
+                card.share_requested.connect(self._share_account)
                 self.cards.append(card)
                 self.scroll_layout.addWidget(card)
         self.scroll_layout.addStretch()
@@ -577,3 +589,54 @@ class MainWindow(QMainWindow):
         if dlg.exec() == QDialog.DialogCode.Accepted and dlg.result_data:
             self.accounts.append(dlg.result_data)
             self._save_and_refresh()
+
+    def _share_account(self, name, seed):
+        account = next(
+            (a for a in self.accounts if a["name"] == name and a["seed"] == seed), None
+        )
+        if account is None:
+            return
+        try:
+            code = export_account(account)
+        except Exception as exc:
+            show_error(self, "Share failed", "Could not build the share code.", exc=exc)
+            return
+        ShareCodeDialog(name, code, self).exec()
+
+    def _import_account(self):
+        text, ok = QInputDialog.getMultiLineText(
+            self, "Import account", "Paste the share code:", ""
+        )
+        if not ok or not text.strip():
+            return
+        try:
+            account = import_account(text)
+        except ShareError as exc:
+            show_error(self, "Import failed", str(exc))
+            return
+
+        if any(a.get("seed") == account.get("seed") for a in self.accounts):
+            QMessageBox.information(
+                self, "Already added", f"{account['name']} is already in your list."
+            )
+            return
+
+        self.accounts.append(account)
+        self._save_and_refresh()
+        self.toast.popup(f"Imported {account['name']}")
+        threading.Thread(
+            target=self._import_push_worker, args=(account,), daemon=True
+        ).start()
+
+    def _import_push_worker(self, account):
+        """Re-register push with this device's FCM token so login prompts arrive
+        here, not on the device the account was shared from."""
+        token = self._valid_access_token(account)
+        note = self._register_push(token, None, account.get("puuid"))
+        self._import_result.emit({"name": account["name"], "note": note})
+
+    def _on_import_result(self, result):
+        save_accounts(self.accounts)
+        QMessageBox.information(
+            self, "Imported", f"Added {result['name']}{result['note']}"
+        )

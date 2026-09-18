@@ -18,6 +18,7 @@ from app.core import get_code
 class AccountCard(QFrame):
     remove_requested = pyqtSignal(str, str)
     copy_requested = pyqtSignal()
+    share_requested = pyqtSignal(str, str)
 
     def __init__(self, name, seed, parent=None):
         super().__init__(parent)
@@ -72,6 +73,7 @@ class AccountCard(QFrame):
         menu = QMenu(self)
         menu.addAction("View Seed", self._show_seed)
         menu.addAction("Copy Seed", self._copy_seed)
+        menu.addAction("Share Account", self._share)
         menu.addSeparator()
         menu.addAction("Remove", self._confirm_remove)
         btn_menu.setMenu(menu)
@@ -131,6 +133,9 @@ class AccountCard(QFrame):
     def _copy_seed(self):
         QApplication.clipboard().setText(self.seed)
         self.copy_requested.emit()
+
+    def _share(self):
+        self.share_requested.emit(self.account_name, self.seed)
 
     def _confirm_remove(self):
         from PyQt6.QtWidgets import QMessageBox
