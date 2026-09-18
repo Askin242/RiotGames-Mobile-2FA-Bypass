@@ -89,6 +89,30 @@ jobs:
             dist/Riot2FA.exe.sha256
           if-no-files-found: error
 
+      - name: Extract changelog notes
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $ver = '${{ github.ref_name }}'.TrimStart('v')
+          $notes = ""
+          if (Test-Path CHANGELOG.md) {
+            $inSection = $false
+            foreach ($line in Get-Content CHANGELOG.md) {
+              if ($line -match '^\s*##\s+') {
+                if ($inSection) { break }
+                if ($line -match ('^\s*##\s+v?' + [regex]::Escape($ver) + '(\s|$)')) {
+                  $inSection = $true
+                  continue
+                }
+              }
+              if ($inSection) { $notes += "$line`n" }
+            }
+          }
+          $notes = $notes.Trim()
+          if (-not $notes) { $notes = "Release $ver" }
+          Set-Content -Path release_notes.md -Value $notes -Encoding utf8
+          Write-Host "--- release notes ---"; Write-Host $notes
+
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
@@ -96,5 +120,6 @@ jobs:
           files: |
             dist/Riot2FA.exe
             dist/Riot2FA.exe.sha256
+          body_path: release_notes.md
           generate_release_notes: true
           fail_on_unmatched_files: true
