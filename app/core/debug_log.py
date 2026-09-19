@@ -9,7 +9,6 @@ console is attached, to stderr. All logging calls elsewhere use the stdlib
 import os
 import sys
 import logging
-from logging.handlers import RotatingFileHandler
 
 from app.core.storage import APPDATA_DIR
 
@@ -30,6 +29,8 @@ def init(force=False):
         _FORCED = True
     if not enabled() or _INITED:
         return LOG_FILE if _INITED else None
+
+    from logging.handlers import RotatingFileHandler
 
     os.makedirs(APPDATA_DIR, exist_ok=True)
     fmt = logging.Formatter(

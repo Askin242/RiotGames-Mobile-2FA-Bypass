@@ -50,6 +50,10 @@ for pkg in (
 hiddenimports += collect_submodules("firebase_messaging")
 hiddenimports += collect_submodules("patchright")
 
+# Stdlib submodules used by obfuscated app code (PyArmor hides these from the
+# analysis, so PyInstaller won't auto-detect them).
+hiddenimports += ["logging.handlers"]
+
 # PyQt6 (Widgets only — login uses Patchright's Chromium now, not WebEngine).
 hiddenimports += [
     "PyQt6.sip",

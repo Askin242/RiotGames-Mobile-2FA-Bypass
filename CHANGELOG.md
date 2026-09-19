@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The section whose
 heading matches a release tag (e.g. `## v2.1.1`) is used as that release's notes,
 with GitHub's auto-generated commit list appended below it.
 
+## v2.1.3
+
+### Fixed
+- Fixed a crash on startup in v2.1.2 ("No module named 'logging.handlers'") that
+  prevented the app from opening. If you're on v2.1.2, download this build
+  manually from the releases page — the broken build cannot auto-update itself.
+
 ## v2.1.2
 
 ### Fixed
