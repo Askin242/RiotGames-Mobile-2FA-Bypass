@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The section whose
 heading matches a release tag (e.g. `## v2.1.1`) is used as that release's notes,
 with GitHub's auto-generated commit list appended below it.
 
+## v2.1.2
+
+### Fixed
+- Push notifications now arrive reliably. A bug in the FCM library made it crash
+  while decrypting an incoming push ("Incorrect padding") and shut the whole
+  listener down, so no login approvals were delivered; the decryption is now
+  padded correctly.
+
 ## v2.1.1
 
 ### Fixed
