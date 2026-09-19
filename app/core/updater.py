@@ -55,6 +55,7 @@ def check_for_update(timeout=8):
             "version": tag.lstrip("vV"),
             "url": release.get("html_url") or RELEASES_PAGE,
             "asset_url": asset_url,
+            "notes": (release.get("body") or "").strip(),
         }
     except Exception:
         return None

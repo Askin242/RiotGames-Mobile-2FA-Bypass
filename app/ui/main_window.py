@@ -55,6 +55,7 @@ from app.ui.qr_scanner_dialog import QrScannerDialog
 from app.ui.qr_confirm_dialog import QrConfirmDialog
 from app.ui.error_dialog import show_error
 from app.ui.share_dialog import ShareCodeDialog
+from app.ui.update_dialog import UpdateDialog
 from app.core import debug_log
 from app.core.debug_log import mask
 
@@ -170,15 +171,7 @@ class MainWindow(QMainWindow):
             self._update_found.emit(info)
 
     def _on_update_found(self, info):
-        reply = QMessageBox.question(
-            self,
-            "Update available",
-            f"A newer version ({info['version']}) is available "
-            f"(you have {__version__}).\n\nWould you like to update?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
-        if reply != QMessageBox.StandardButton.Yes:
+        if UpdateDialog(__version__, info, self).exec() != QDialog.DialogCode.Accepted:
             return
         if updater.is_frozen() and info.get("asset_url"):
             self._begin_update(info["asset_url"])
