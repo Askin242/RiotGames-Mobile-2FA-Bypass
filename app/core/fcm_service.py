@@ -22,8 +22,11 @@ from app.core.storage import (
     save_persistent_ids,
 )
 from app.core.debug_log import mask
+from app.core import fcm_patch
 
 log = logging.getLogger(__name__)
+
+fcm_patch.apply()
 
 FIREBASE_PROJECT_ID = "leagueconnect-1f13a"
 FIREBASE_APP_ID = "1:595870631183:android:cdbf60becd73557e"
