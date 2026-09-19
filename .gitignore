@@ -5,8 +5,10 @@ __pycache__/
 venv/
 
 dist/
+dist_debug/
 build/obf/
 build/_work/
+build/_work_debug/
 build/version_info.txt
 *.spec.bak
 
