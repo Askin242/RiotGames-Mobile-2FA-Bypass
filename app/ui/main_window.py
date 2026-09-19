@@ -1,5 +1,6 @@
 import os
 import time
+import logging
 import threading
 import webbrowser
 
@@ -54,9 +55,13 @@ from app.ui.qr_scanner_dialog import QrScannerDialog
 from app.ui.qr_confirm_dialog import QrConfirmDialog
 from app.ui.error_dialog import show_error
 from app.ui.share_dialog import ShareCodeDialog
+from app.core import debug_log
+from app.core.debug_log import mask
 
 ICON_PATH = resource_path(os.path.join("images", "icon.png"))
 QR_ICON_PATH = resource_path(os.path.join("images", "qr.png"))
+
+log = logging.getLogger(__name__)
 
 class _UpdateCancelled(Exception):
     """Raised inside the download loop when the user cancels the update."""
@@ -270,6 +275,8 @@ class MainWindow(QMainWindow):
         self.tray.setToolTip("Riot 2FA")
         menu = QMenu()
         menu.addAction("Show", self._show_from_tray)
+        if debug_log.enabled():
+            menu.addAction("Open debug log", self._open_debug_log)
         menu.addSeparator()
         menu.addAction("Quit", self._quit_app)
         self.tray.setContextMenu(menu)
@@ -284,6 +291,14 @@ class MainWindow(QMainWindow):
         self.showNormal()
         self.raise_()
         self.activateWindow()
+
+    def _open_debug_log(self):
+        try:
+            os.startfile(debug_log.LOG_FILE)  # noqa: S606  (Windows-only convenience)
+        except Exception:
+            show_error(
+                self, "Debug log", f"Log file:\n{debug_log.LOG_FILE}"
+            )
 
     def _quit_app(self):
         self.fcm.stop()
@@ -358,12 +373,19 @@ class MainWindow(QMainWindow):
     def _on_push(self, data):
         """A login attempt arrived via push — show the approve/deny prompt."""
         puuid = data.get("puuid")
+        known = [(a.get("name"), a.get("puuid")) for a in self.accounts]
+        log.debug("_on_push: incoming puuid=%r; known accounts=%r", puuid, known)
         account = next(
             (a for a in self.accounts if a.get("puuid") and a["puuid"] == puuid), None
         )
         if account is None:
-
+            log.warning(
+                "_on_push: DROPPED — no stored account matches puuid=%r "
+                "(account added manually/without puuid, or push is for another account)",
+                puuid,
+            )
             return
+        log.debug("_on_push: matched account %r", account.get("name"))
 
         if self._push_is_stale(data):
             return
@@ -372,7 +394,9 @@ class MainWindow(QMainWindow):
         if suuid and any(
             p.push.get("suuid") == suuid for p in self._active_prompts
         ):
+            log.debug("_on_push: DROPPED — a prompt is already open for suuid=%s", suuid)
             return
+        log.debug("_on_push: showing approve/deny prompt for suuid=%s", suuid)
 
         self.tray.showMessage(
             "Riot login attempt",
@@ -403,8 +427,21 @@ class MainWindow(QMainWindow):
         try:
             ts = int(attempted_at) / 1000.0
         except (TypeError, ValueError):
+            log.debug(
+                "_push_is_stale: no usable attempted_at (%r) — treating as fresh",
+                attempted_at,
+            )
             return False
-        return (time.time() - ts) > self._PUSH_TTL_SECONDS
+        age = time.time() - ts
+        stale = age > self._PUSH_TTL_SECONDS
+        log.debug(
+            "_push_is_stale: attempted_at=%s age=%.1fs ttl=%ds -> %s"
+            "%s",
+            attempted_at, age, self._PUSH_TTL_SECONDS,
+            "STALE (dropped)" if stale else "fresh",
+            "  [check the device clock if this is a live attempt!]" if stale else "",
+        )
+        return stale
 
     def _add_via_login(self):
         if self._login_busy:
@@ -541,22 +578,32 @@ class MainWindow(QMainWindow):
 
     def _register_push(self, access_token, id_tok, puuid):
         """Register this account's FCM device so logins push here. Best-effort."""
+        log.debug(
+            "_register_push: puuid=%r access_token=%s id_tok=%s",
+            puuid, mask(access_token), mask(id_tok),
+        )
         if not puuid:
+            log.warning("_register_push: no puuid — push cannot be enabled for this account")
             return "\n\n(Push approval unavailable: could not read account id.)"
 
         tokens = [t for t in (access_token, id_tok) if t]
         if not tokens:
+            log.warning("_register_push: no access/id token — cannot register with Riot")
             return "\n\n(Push approval unavailable: missing access token.)"
+        log.debug("_register_push: waiting up to 30s for FCM token…")
         fcm_token = self.fcm.wait_for_token(30)
         if not fcm_token:
+            log.warning("_register_push: FCM token not ready — listener never registered")
             return "\n\n(Push approval unavailable: listener not ready.)"
         last_exc = None
         for token in tokens:
             try:
                 register_mfa_push_device(token, fcm_token)
+                log.debug("_register_push: SUCCESS — this device is now registered for puuid=%r", puuid)
                 return "\n\nPush approval is enabled for this account."
             except Exception as exc:
                 last_exc = exc
+                log.warning("_register_push: registration attempt failed: %r", exc)
         return f"\n\n(Push approval registration failed: {last_exc})"
 
     def _valid_access_token(self, account):

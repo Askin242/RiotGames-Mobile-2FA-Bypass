@@ -21,6 +21,9 @@ from app.core.storage import (
     load_persistent_ids,
     save_persistent_ids,
 )
+from app.core.debug_log import mask
+
+log = logging.getLogger(__name__)
 
 FIREBASE_PROJECT_ID = "leagueconnect-1f13a"
 FIREBASE_APP_ID = "1:595870631183:android:cdbf60becd73557e"
@@ -62,7 +65,9 @@ class FcmService(QObject):
 
     def start(self):
         if self._thread is not None:
+            log.debug("FcmService.start() ignored — already running")
             return
+        log.debug("FcmService.start() — launching listener thread")
         self._thread = threading.Thread(
             target=self._run, name="fcm-listener", daemon=True
         )
@@ -93,6 +98,12 @@ class FcmService(QObject):
 
     async def _setup(self):
         try:
+            creds = load_fcm_credentials()
+            log.debug(
+                "FCM setup: stored credentials %s, seeded persistent_ids=%d",
+                "present" if creds else "MISSING (will register fresh)",
+                len(self._persistent_ids),
+            )
             config = FcmRegisterConfig(
                 project_id=FIREBASE_PROJECT_ID,
                 app_id=FIREBASE_APP_ID,
@@ -103,7 +114,7 @@ class FcmService(QObject):
             self._client = FcmPushClient(
                 self._on_notification,
                 config,
-                credentials=load_fcm_credentials(),
+                credentials=creds,
                 credentials_updated_callback=self._on_credentials_updated,
                 received_persistent_ids=list(self._persistent_ids),
             )
@@ -111,23 +122,30 @@ class FcmService(QObject):
             last_exc = None
             for attempt in range(5):
                 try:
+                    log.debug("checkin_or_register attempt %d/5", attempt + 1)
                     self._fcm_token = await self._client.checkin_or_register()
                     last_exc = None
+                    log.debug("FCM token acquired: %s", mask(self._fcm_token))
                     break
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
                     last_exc = exc
+                    log.warning(
+                        "checkin_or_register attempt %d failed: %r", attempt + 1, exc
+                    )
                     await asyncio.sleep(min(2 ** attempt, 30))
             if last_exc is not None:
                 raise last_exc
             self._token_event.set()
             self.token_ready.emit(self._fcm_token or "")
+            log.debug("FCM listener starting (connecting to MCS)…")
             await self._client.start()
+            log.debug("FCM listener connected and running")
         except asyncio.CancelledError:
             raise
         except Exception:
-            logging.getLogger(__name__).exception("FCM listener setup failed")
+            log.exception("FCM listener setup FAILED — no pushes will arrive")
             self._token_event.set()
 
     async def _teardown(self):
@@ -135,15 +153,20 @@ class FcmService(QObject):
             await self._client.stop()
 
     def _on_credentials_updated(self, creds):
+        log.debug("FCM credentials updated/persisted")
         save_fcm_credentials(creds)
 
     def _on_notification(self, notification, persistent_id, obj):
+        log.debug(
+            "PUSH received: persistent_id=%s raw=%r", persistent_id, notification
+        )
         if persistent_id:
             self._persistent_ids.append(persistent_id)
             try:
                 save_persistent_ids(self._persistent_ids)
             except Exception:
-                pass
+                log.exception("failed to persist persistent_ids")
 
         data = notification.get("data", notification) if notification else {}
+        log.debug("PUSH data payload -> %r", dict(data))
         self.push_received.emit(dict(data))

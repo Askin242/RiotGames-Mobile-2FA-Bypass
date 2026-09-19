@@ -13,7 +13,14 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 ROOT = os.path.dirname(os.path.abspath(SPECPATH))
 OBF = os.path.join(SPECPATH, "obf")
 
-if os.path.exists(os.path.join(OBF, "main.py")):
+# Debug build: set RIOT2FA_DEBUG_BUILD=1 to produce a console exe named
+# Riot2FA_debug that forces verbose logging on (never obfuscated).
+_DEBUG_BUILD = bool(os.environ.get("RIOT2FA_DEBUG_BUILD"))
+
+if _DEBUG_BUILD:
+    entry = os.path.join(ROOT, "main_debug.py")
+    pathex = [ROOT]
+elif os.path.exists(os.path.join(OBF, "main.py")):
     entry = os.path.join(OBF, "main.py")
     pathex = [OBF, ROOT]
 else:
@@ -124,13 +131,13 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="Riot2FA",
+    name="Riot2FA_debug" if _DEBUG_BUILD else "Riot2FA",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,                       # UPX raises AV false positives — keep off
     runtime_tmpdir=None,
-    console=False,                   # GUI app, no console window
+    console=_DEBUG_BUILD,            # debug build shows a console for live logs
     disable_windowed_traceback=False,
     icon=os.path.join(ROOT, "images", "icon.ico"),
     version=os.path.join(SPECPATH, "version_info.txt")

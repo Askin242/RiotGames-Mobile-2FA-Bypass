@@ -2,11 +2,15 @@ import re
 import time
 import json
 import base64
+import logging
 
 import requests
 
 from app.core.auth_totp import get_code
 from app.core.errors import RiotApiError
+from app.core.debug_log import mask
+
+log = logging.getLogger(__name__)
 
 def decode_jwt_payload(token):
     try:
@@ -184,6 +188,10 @@ def register_mfa_push_device(access_token, fcm_token):
     Authenticated with the account's RSO access token (the `access_token`
     cookie from account.riotgames.com works). This is a PUT and returns 204.
     """
+    log.debug(
+        "MPS register: access_token=%s fcm_token=%s -> PUT %s",
+        mask(access_token), mask(fcm_token), MPS_REGISTER_MFA_URL,
+    )
     resp = requests.put(
         MPS_REGISTER_MFA_URL,
         headers={
@@ -195,6 +203,10 @@ def register_mfa_push_device(access_token, fcm_token):
             {"device_token": fcm_token, "platform": "android", "locale": "en-US"}
         ),
         timeout=20,
+    )
+    log.debug(
+        "MPS register response: HTTP %s body=%r",
+        resp.status_code, (resp.text or "")[:300],
     )
     resp.raise_for_status()
     return resp
