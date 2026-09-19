@@ -103,9 +103,11 @@ class FcmService(QObject):
         try:
             creds = load_fcm_credentials()
             log.debug(
-                "FCM setup: stored credentials %s, seeded persistent_ids=%d",
+                "FCM setup: stored credentials %s, seeded persistent_ids=%d, "
+                "decrypt patch active=%s",
                 "present" if creds else "MISSING (will register fresh)",
                 len(self._persistent_ids),
+                fcm_patch._applied,
             )
             config = FcmRegisterConfig(
                 project_id=FIREBASE_PROJECT_ID,
