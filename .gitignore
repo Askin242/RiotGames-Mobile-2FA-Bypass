@@ -2,6 +2,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+.cache/
 venv/
 
 dist/
@@ -20,6 +21,7 @@ spike/
 *.har
 build/pyi-src/
 build/build.log
+build/inno.log
 
 # Local request captures / debug dumps (may contain live cookies + csrf)
 enable_mfa*.json

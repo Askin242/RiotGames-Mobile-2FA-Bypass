@@ -51,7 +51,6 @@ from app.ui.toast import Toast
 from app.ui.account_card import AccountCard
 from app.ui.manual_add_dialog import ManualAddDialog
 from app.ui.mfa_prompt_dialog import MfaPromptDialog
-from app.ui.qr_scanner_dialog import QrScannerDialog
 from app.ui.qr_confirm_dialog import QrConfirmDialog
 from app.ui.error_dialog import show_error
 from app.ui.share_dialog import ShareCodeDialog
@@ -649,6 +648,8 @@ class MainWindow(QMainWindow):
         return usable[labels.index(label)]
 
     def _scan_qr(self):
+        from app.ui.qr_scanner_dialog import QrScannerDialog
+
         scanner = QrScannerDialog(self)
         if scanner.exec() != QDialog.DialogCode.Accepted or not scanner.result_text:
             return

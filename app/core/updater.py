@@ -3,6 +3,8 @@
 import os
 import sys
 import subprocess
+import tempfile
+from urllib.parse import urlparse
 
 import requests
 
@@ -45,11 +47,16 @@ def check_for_update(timeout=8):
         tag = release.get("tag_name") or ""
         if not tag or _parse(tag) <= _parse(__version__):
             return None
-        asset_url = None
-        for asset in release.get("assets", []):
-            if asset.get("name", "").lower().endswith(".exe"):
-                asset_url = asset.get("browser_download_url")
-                break
+        assets = release.get("assets", [])
+        installer = next(
+            (a for a in assets if a.get("name", "").lower() == "riot2fa-setup.exe"),
+            None,
+        )
+        portable = next(
+            (a for a in assets if a.get("name", "").lower() == "riot2fa.exe"),
+            None,
+        )
+        asset_url = (installer or portable or {}).get("browser_download_url")
         return {
             "tag": tag,
             "version": tag.lstrip("vV"),
@@ -62,31 +69,42 @@ def check_for_update(timeout=8):
 
 
 def download_update(asset_url, progress_cb=None, timeout=120):
-    """Download the new exe next to the current one. Returns the temp path.
+    """Download an installer to a temporary directory or a portable exe beside the app.
 
     `progress_cb(done_bytes, total_bytes)` is called as bytes arrive (total is
     0 when the server sends no Content-Length). Raises on failure.
     """
-    target = os.path.abspath(sys.argv[0])
-    new_path = target + ".new"
-    with requests.get(asset_url, stream=True, timeout=timeout) as resp:
-        resp.raise_for_status()
-        total = int(resp.headers.get("Content-Length") or 0)
-        done = 0
-        with open(new_path, "wb") as out:
-            for chunk in resp.iter_content(65536):
-                if not chunk:
-                    continue
-                out.write(chunk)
-                done += len(chunk)
-                if progress_cb:
-                    progress_cb(done, total)
-    if total and done < total:
+    installer = os.path.basename(urlparse(asset_url).path).lower() == "riot2fa-setup.exe"
+    new_path = (
+        os.path.join(tempfile.mkdtemp(prefix="riot2fa-update-"), "Riot2FA-Setup.exe")
+        if installer else os.path.abspath(sys.argv[0]) + ".new"
+    )
+    try:
+        with requests.get(asset_url, stream=True, timeout=timeout) as resp:
+            resp.raise_for_status()
+            total = int(resp.headers.get("Content-Length") or 0)
+            done = 0
+            with open(new_path, "wb") as out:
+                for chunk in resp.iter_content(65536):
+                    if not chunk:
+                        continue
+                    out.write(chunk)
+                    done += len(chunk)
+                    if progress_cb:
+                        progress_cb(done, total)
+        if total and done < total:
+            raise IOError(f"Download incomplete ({done} of {total} bytes).")
+    except Exception:
         try:
             os.remove(new_path)
         except OSError:
             pass
-        raise IOError(f"Download incomplete ({done} of {total} bytes).")
+        if installer:
+            try:
+                os.rmdir(os.path.dirname(new_path))
+            except OSError:
+                pass
+        raise
     return new_path
 
 
@@ -105,9 +123,16 @@ _PYI_HANDOFF_VARS = (
 
 
 def launch_swap(new_path):
-    """Spawn a hidden helper that waits for this app to exit, swaps in the new
-    exe and relaunches it. The caller should quit right after calling this.
-    """
+    """Start the installer, or swap and relaunch a portable executable."""
+    env = dict(os.environ)
+    for name in list(env):
+        if name in _PYI_HANDOFF_VARS or name.startswith("_PYI"):
+            env.pop(name, None)
+
+    if os.path.basename(new_path).lower() == "riot2fa-setup.exe":
+        subprocess.Popen([new_path], close_fds=True, env=env)
+        return
+
     target = os.path.abspath(sys.argv[0])
     bat_path = target + ".update.bat"
     unset = "".join(f'set "{name}="\r\n' for name in _PYI_HANDOFF_VARS)
@@ -126,11 +151,6 @@ def launch_swap(new_path):
     )
     with open(bat_path, "w") as out:
         out.write(script)
-
-    env = dict(os.environ)
-    for name in list(env):
-        if name in _PYI_HANDOFF_VARS or name.startswith("_PYI"):
-            env.pop(name, None)
 
     CREATE_NO_WINDOW = 0x08000000
     subprocess.Popen(

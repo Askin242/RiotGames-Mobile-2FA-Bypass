@@ -4,9 +4,9 @@ name: Build & Release
 # release binary was produced from this public repo (not tampered with locally).
 #
 #   - Push a tag like v2.1.1  -> builds and publishes a GitHub Release with the
-#     exe, its SHA-256, and a signed build-provenance attestation attached.
+#     portable exe, installer, checksums, and build-provenance attestation.
 #   - Run manually (Actions -> Build & Release -> Run workflow) -> builds and
-#     uploads the exe as a workflow artifact, without creating a release.
+#     uploads both Windows packages as a workflow artifact, without a release.
 
 on:
   push:
@@ -47,6 +47,9 @@ jobs:
       - name: Install Patchright Chromium
         run: python -m patchright install chromium
 
+      - name: Test updater
+        run: python -m unittest discover -s tests -v
+
       - name: Build
         shell: pwsh
         run: |
@@ -55,6 +58,29 @@ jobs:
           } else {
             python build/build.py
           }
+
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $ver = (python -c "from app.version import __version__; print(__version__)").Trim()
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$ver" build/Riot2FA.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Smoke test installer
+        shell: pwsh
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'Riot2FA-Smoke'
+          $setup = (Resolve-Path 'dist/Riot2FA-Setup.exe').Path
+          $install = Start-Process -FilePath $setup -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$target`"") -Wait -PassThru -WindowStyle Hidden
+          if ($install.ExitCode -ne 0) { throw "Installer exited with $($install.ExitCode)" }
+          if (-not (Test-Path (Join-Path $target 'Riot2FA.exe'))) { throw 'Installed executable is missing' }
+          if (-not (Test-Path (Join-Path $target '_internal/ms-playwright'))) { throw 'Bundled browser is missing' }
+          if (-not (Test-Path (Join-Path $env:APPDATA 'Microsoft/Windows/Start Menu/Programs/Riot 2FA/Riot 2FA.lnk'))) { throw 'Start Menu shortcut is missing' }
+          $uninstall = Start-Process -FilePath (Join-Path $target 'unins000.exe') -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru -WindowStyle Hidden
+          if ($uninstall.ExitCode -ne 0) { throw "Uninstaller exited with $($uninstall.ExitCode)" }
 
       - name: Verify tag matches app version
         if: startsWith(github.ref, 'refs/tags/')
@@ -71,14 +97,16 @@ jobs:
       - name: Checksum
         shell: pwsh
         run: |
-          $h = (Get-FileHash dist/Riot2FA.exe -Algorithm SHA256).Hash.ToLower()
-          "$h  Riot2FA.exe" | Out-File -Encoding ascii dist/Riot2FA.exe.sha256
-          Write-Host "SHA-256: $h"
+          foreach ($file in @('Riot2FA.exe', 'Riot2FA-Setup.exe')) {
+            $h = (Get-FileHash "dist/$file" -Algorithm SHA256).Hash.ToLower()
+            "$h  $file" | Out-File -Encoding ascii "dist/$file.sha256"
+            Write-Host "$file SHA-256: $h"
+          }
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v1
         with:
-          subject-path: dist/Riot2FA.exe
+          subject-path: dist/*.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -87,6 +115,8 @@ jobs:
           path: |
             dist/Riot2FA.exe
             dist/Riot2FA.exe.sha256
+            dist/Riot2FA-Setup.exe
+            dist/Riot2FA-Setup.exe.sha256
           if-no-files-found: error
 
       - name: Extract changelog notes
@@ -120,6 +150,8 @@ jobs:
           files: |
             dist/Riot2FA.exe
             dist/Riot2FA.exe.sha256
+            dist/Riot2FA-Setup.exe
+            dist/Riot2FA-Setup.exe.sha256
           body_path: release_notes.md
           generate_release_notes: true
           fail_on_unmatched_files: true

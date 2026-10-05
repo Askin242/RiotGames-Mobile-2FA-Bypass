@@ -1,4 +1,4 @@
-"""Build Riot2FA.exe with the lowest AV false-positive footprint.
+"""Build portable and installable Windows distributions.
 
 Pipeline (proven to minimise false positives):
     PyArmor obfuscate  ->  PyInstaller pack (UPX off, version resource on)
@@ -8,8 +8,8 @@ For the very lowest count, also use a PyInstaller bootloader rebuilt with GCC
 PyInstaller is installed, so install your GCC-built one first.
 
 Usage:
-    python build/build.py                # obfuscate + pack
-    python build/build.py --no-obfuscate # plain PyInstaller (more false positives)
+    python build/build.py                # obfuscate + portable and folder builds
+    python build/build.py --no-obfuscate # plain PyInstaller builds
 """
 
 import os
@@ -83,16 +83,21 @@ def obfuscate():
     return True
 
 
-def package():
+def package(onedir=False):
     if not _have("PyInstaller"):
         sys.exit("[build] PyInstaller not installed (pip install pyinstaller).")
-    print("[build] packing with PyInstaller ...")
+    print(f"[build] packing {'folder' if onedir else 'portable exe'} with PyInstaller ...")
+    env = dict(os.environ)
+    if onedir:
+        env["RIOT2FA_ONEDIR"] = "1"
+    else:
+        env.pop("RIOT2FA_ONEDIR", None)
     subprocess.run(
         [
-            sys.executable, "-m", "PyInstaller", "--clean", "-y",
+            sys.executable, "-m", "PyInstaller", "-y",
             "--workpath", WORK, "--distpath", DIST, SPEC,
         ],
-        cwd=ROOT, check=True,
+        cwd=ROOT, check=True, env=env,
     )
 
 
@@ -103,8 +108,10 @@ def main():
     if do_obf:
         obfuscate()
     package()
+    package(onedir=True)
     exe = os.path.join(DIST, "Riot2FA.exe")
-    print("\n[build] done ->", exe if os.path.exists(exe) else DIST)
+    folder_exe = os.path.join(DIST, "Riot2FA", "Riot2FA.exe")
+    print("\n[build] done ->", exe, "and", folder_exe)
     print("[build] for the lowest false positives, build with a GCC-rebuilt "
           "PyInstaller bootloader (see build/BOOTLOADER.md).")
 

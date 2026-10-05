@@ -16,6 +16,7 @@ OBF = os.path.join(SPECPATH, "obf")
 # Debug build: set RIOT2FA_DEBUG_BUILD=1 to produce a console exe named
 # Riot2FA_debug that forces verbose logging on (never obfuscated).
 _DEBUG_BUILD = bool(os.environ.get("RIOT2FA_DEBUG_BUILD"))
+_ONEDIR = bool(os.environ.get("RIOT2FA_ONEDIR"))
 
 if _DEBUG_BUILD:
     entry = os.path.join(ROOT, "main_debug.py")
@@ -132,8 +133,8 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
+    [] if _ONEDIR else a.binaries,
+    [] if _ONEDIR else a.datas,
     [],
     name="Riot2FA_debug" if _DEBUG_BUILD else "Riot2FA",
     debug=False,
@@ -147,4 +148,8 @@ exe = EXE(
     version=os.path.join(SPECPATH, "version_info.txt")
     if os.path.exists(os.path.join(SPECPATH, "version_info.txt"))
     else None,
+    exclude_binaries=_ONEDIR,
 )
+
+if _ONEDIR:
+    coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="Riot2FA")

@@ -40,7 +40,7 @@ It uses Riot's own login flow to fetch your 2FA secret, stores it locally on you
 - **Multiple accounts**: Manage more than one Riot account at the same time from the same device.
 - **Push login approval**: Just like the mobile app - when someone logs into your account you get a desktop prompt showing the login's location and time, with **Allow / Refuse** buttons. The app stays in the system tray so prompts arrive even when the window is closed.
 - **QR code sign-in**: Scan the Riot client's "sign in with QR" code straight off your screen (drag the little reader over it) to sign that account into the client — no phone needed. Uses your saved session, so it works any time.
-- **Local storage**: Account data is stored locally in a simple JSON file alongside the app, wich mean control on your datas, and easily sharable.
+- **Local storage**: Account data is stored in `%APPDATA%\Riot2FA\accounts.json` and remains in place across updates or reinstalls.
 - **Auto-update**: On launch the app checks GitHub for a newer release and, if one exists, offers to update with one click.
 
 ### 🎥 Video Tutorial
@@ -58,7 +58,7 @@ Main window:
 - Windows 10 or newer (tested)
 - Python 3.10+ (only needed if running from source)
 - Installed dependencies (PyQt6, patchright, requests)
-  > The prebuilt `Riot2FA.exe` bundles its own browser — nothing else to install.
+  > Prebuilt releases bundle their own browser.
 
 ---
 
@@ -67,14 +67,15 @@ Main window:
 #### Option 1 — Download prebuilt release (recommended)
 
 - Go to the [**Releases**](https://github.com/Askin242/RiotGames-Mobile-2FA-Bypass/releases) section of this project.
-- Download `Riot2FA.exe`.
-- Run it. The app checks for updates on launch and can update itself.
+- Download `Riot2FA-Setup.exe` and run it once. Launch Riot 2FA from the Start Menu afterward.
+- The installed app checks for updates on launch and offers to install new releases.
+- `Riot2FA.exe` remains available as a portable option, but takes longer to start.
 
 > **Every release is built by GitHub Actions from this public source** — not on a
 > developer's machine — so you can audit exactly how the binary was produced.
-> Each release includes `Riot2FA.exe.sha256` (verify with
-> `Get-FileHash Riot2FA.exe -Algorithm SHA256`) and a signed build-provenance
-> attestation you can check with `gh attestation verify Riot2FA.exe --repo Askin242/RiotGames-Mobile-2FA-Bypass`.
+> Each release includes SHA-256 files for both downloads (verify with
+> `Get-FileHash Riot2FA-Setup.exe -Algorithm SHA256`) and signed build-provenance
+> attestations you can check with `gh attestation verify Riot2FA-Setup.exe --repo Askin242/RiotGames-Mobile-2FA-Bypass`.
 
 #### Option 2 — Run from source
 
@@ -104,12 +105,21 @@ The build is tuned for the **lowest antivirus false positives** (PyArmor + PyIns
 
 ```bash
 pip install -r build/requirements-build.txt
-python build/build.py          # -> dist/Riot2FA.exe
+python build/build.py          # -> dist/Riot2FA.exe and dist/Riot2FA/
 ```
+
+On Windows, install Inno Setup 6 and compile the installer with the version in `app/version.py`:
+
+```powershell
+$version = (python -c "from app.version import __version__; print(__version__)").Trim()
+ISCC.exe "/DAppVersion=$version" build/Riot2FA.iss
+```
+
+The installed folder build starts without unpacking the whole application on each launch.
 
 For the absolute fewest false positives, first rebuild PyInstaller's bootloader with GCC — see [`build/BOOTLOADER.md`](build/BOOTLOADER.md).
 
-Releases are normally cut by CI: push a tag matching `app/version.py` (e.g. `git tag v2.1.1 && git push origin v2.1.1`) and [`.github/workflows/build.yml`](.github/workflows/build.yml) builds `Riot2FA.exe`, attaches its checksum, records a provenance attestation, and publishes the release.
+Releases are cut by CI when a new version tag matching `app/version.py` is pushed. [`.github/workflows/build.yml`](.github/workflows/build.yml) builds the portable executable and installer, attaches their checksums, records provenance attestations, and publishes the release.
 
 ---
 
