@@ -11,6 +11,7 @@ with GitHub's auto-generated commit list appended below it.
 - Faster-starting folder distribution alongside the portable executable.
 
 ### Improved
+- Renamed "Add via Login" to "Add an account" and removed manual account entry.
 - Load QR scanner libraries only when scanning starts.
 - Prefer the installer for in-app updates.
 
