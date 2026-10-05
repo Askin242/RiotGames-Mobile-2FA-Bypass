@@ -28,3 +28,6 @@ enable_mfa*.json
 dist_test/
 build/build_test.log
 *.rar
+build/folder.log
+build/portable.log
+build/pyarmor.log

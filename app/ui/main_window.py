@@ -49,7 +49,6 @@ from app.api import (
 )
 from app.ui.toast import Toast
 from app.ui.account_card import AccountCard
-from app.ui.manual_add_dialog import ManualAddDialog
 from app.ui.mfa_prompt_dialog import MfaPromptDialog
 from app.ui.qr_confirm_dialog import QrConfirmDialog
 from app.ui.error_dialog import show_error
@@ -96,17 +95,11 @@ class MainWindow(QMainWindow):
         hdr.addWidget(title)
         hdr.addStretch()
 
-        b1 = QPushButton("Add via Login")
+        b1 = QPushButton("Add an account")
         b1.setObjectName("addLoginBtn")
         b1.setFixedWidth(130)
         b1.clicked.connect(self._add_via_login)
         hdr.addWidget(b1)
-        hdr.addSpacing(6)
-        b2 = QPushButton("Add Manually")
-        b2.setObjectName("addManualBtn")
-        b2.setFixedWidth(120)
-        b2.clicked.connect(self._add_manually)
-        hdr.addWidget(b2)
         hdr.addSpacing(6)
         b3 = QPushButton("Import")
         b3.setObjectName("addManualBtn")
@@ -630,8 +623,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 "No usable account",
-                "QR sign-in needs an account added via 'Add via Login'. "
-                "Accounts added manually or before this feature can't sign in.",
+                "QR sign-in needs an account added with Riot login.",
             )
             return None
 
@@ -675,7 +667,7 @@ class MainWindow(QMainWindow):
                     self,
                     "Session expired",
                     f"Couldn't refresh the session for {account.get('name')}. "
-                    "Re-add it via 'Add via Login'.",
+                    "Add the account again with Riot login.",
                 )
                 return
             try:
@@ -715,12 +707,6 @@ class MainWindow(QMainWindow):
 
     def _qr_warn(self, title, exc):
         show_error(self, title, str(exc), exc=exc)
-
-    def _add_manually(self):
-        dlg = ManualAddDialog(self)
-        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.result_data:
-            self.accounts.append(dlg.result_data)
-            self._save_and_refresh()
 
     def _share_account(self, name, seed):
         account = next(
