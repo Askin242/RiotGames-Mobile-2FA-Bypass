@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The section whose
 heading matches a release tag (e.g. `## v2.1.1`) is used as that release's notes,
 with GitHub's auto-generated commit list appended below it.
 
+## v2.1.4
+
+### Added
+- Installable Windows build with Start Menu and optional desktop shortcuts.
+- Faster-starting folder distribution alongside the portable executable.
+
+### Improved
+- Load QR scanner libraries only when scanning starts.
+- Prefer the installer for in-app updates.
+
 ## v2.1.3
 
 ### Fixed
