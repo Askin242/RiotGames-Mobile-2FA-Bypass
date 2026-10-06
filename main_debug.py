@@ -1,13 +1,17 @@
-"""Debug entrypoint: forces verbose logging on, then runs the app.
+"""Manual diagnostic entry point, separate from the release build."""
 
-Packaged as the console build `Riot2FA_debug.exe` for diagnosing push issues.
-"""
+import logging
 
-import os
+from app.core import debug_log
 
-os.environ.setdefault("RIOT2FA_DEBUG", "1")
-
-from app.main import main
+# Debug logging is enabled only when this script is run directly.
+debug_log.init(force=True)
 
 if __name__ == "__main__":
-    main()
+    try:
+        from app.main import main
+
+        main()
+    except Exception:
+        logging.getLogger(__name__).exception("Debug build startup failed")
+        raise

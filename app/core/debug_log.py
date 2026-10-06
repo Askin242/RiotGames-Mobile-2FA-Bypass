@@ -1,8 +1,9 @@
 """Opt-in verbose logging for diagnosing push-notification problems.
 
-Enabled when the env var ``RIOT2FA_DEBUG`` is set (the debug build sets it), or
-via ``init(force=True)``. Writes to ``%APPDATA%/Riot2FA/debug.log`` and, when a
-console is attached, to stderr. All logging calls elsewhere use the stdlib
+Enabled when the env var ``RIOT2FA_DEBUG`` is set or by explicitly running the
+debug entry point, which calls ``init(force=True)``. Writes to
+``%APPDATA%/Riot2FA/debug.log`` and, when a console is attached, to stderr.
+All logging calls elsewhere use the stdlib
 ``logging`` module at DEBUG level, so they are silent in normal builds.
 """
 

@@ -12,6 +12,7 @@ import logging
 import threading
 
 from PyQt6.QtCore import QObject, pyqtSignal
+from aiohttp import ClientSession
 
 from firebase_messaging import FcmPushClient, FcmRegisterConfig
 
@@ -33,6 +34,9 @@ FIREBASE_APP_ID = "1:595870631183:android:cdbf60becd73557e"
 FIREBASE_API_KEY = "AIzaSyCxhfh9jZtDD2KBUUO6d7HySuzG4xjdR4o"
 FIREBASE_SENDER_ID = "595870631183"
 ANDROID_PACKAGE = "com.riotgames.mobile.leagueconnect"
+# SHA-1 of the signing certificate in Riot Mobile 5.2.0's APK. Google requires
+# both Android identity headers when an API key is restricted to Android apps.
+ANDROID_CERT_SHA1 = "BB8C141D6E2CCE36551021FB3CD05188EF4D03F2"
 
 logging.getLogger("firebase_messaging").setLevel(logging.CRITICAL)
 
@@ -116,32 +120,41 @@ class FcmService(QObject):
                 messaging_sender_id=FIREBASE_SENDER_ID,
                 bundle_id=ANDROID_PACKAGE,
             )
-            self._client = FcmPushClient(
-                self._on_notification,
-                config,
-                credentials=creds,
-                credentials_updated_callback=self._on_credentials_updated,
-                received_persistent_ids=list(self._persistent_ids),
-            )
+            # FcmRegister supplies per-request headers for the API key but does
+            # not include the Android identity required by this project's key.
+            # Session defaults are merged into its installation, refresh, and
+            # registration requests without modifying the vendored library.
+            async with ClientSession(headers={
+                "X-Android-Package": ANDROID_PACKAGE,
+                "X-Android-Cert": ANDROID_CERT_SHA1,
+            }) as session:
+                self._client = FcmPushClient(
+                    self._on_notification,
+                    config,
+                    credentials=creds,
+                    credentials_updated_callback=self._on_credentials_updated,
+                    received_persistent_ids=list(self._persistent_ids),
+                    http_client_session=session,
+                )
 
-            last_exc = None
-            for attempt in range(5):
-                try:
-                    log.debug("checkin_or_register attempt %d/5", attempt + 1)
-                    self._fcm_token = await self._client.checkin_or_register()
-                    last_exc = None
-                    log.debug("FCM token acquired: %s", mask(self._fcm_token))
-                    break
-                except asyncio.CancelledError:
-                    raise
-                except Exception as exc:
-                    last_exc = exc
-                    log.warning(
-                        "checkin_or_register attempt %d failed: %r", attempt + 1, exc
-                    )
-                    await asyncio.sleep(min(2 ** attempt, 30))
-            if last_exc is not None:
-                raise last_exc
+                last_exc = None
+                for attempt in range(5):
+                    try:
+                        log.debug("checkin_or_register attempt %d/5", attempt + 1)
+                        self._fcm_token = await self._client.checkin_or_register()
+                        last_exc = None
+                        log.debug("FCM token acquired: %s", mask(self._fcm_token))
+                        break
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:
+                        last_exc = exc
+                        log.warning(
+                            "checkin_or_register attempt %d failed: %r", attempt + 1, exc
+                        )
+                        await asyncio.sleep(min(2 ** attempt, 30))
+                if last_exc is not None:
+                    raise last_exc
             self._token_event.set()
             self.token_ready.emit(self._fcm_token or "")
             log.debug("FCM listener starting (connecting to MCS)…")
@@ -162,9 +175,7 @@ class FcmService(QObject):
         save_fcm_credentials(creds)
 
     def _on_notification(self, notification, persistent_id, obj):
-        log.debug(
-            "PUSH received: persistent_id=%s raw=%r", persistent_id, notification
-        )
+        log.debug("PUSH received: persistent_id=%s", persistent_id)
         if persistent_id:
             self._persistent_ids.append(persistent_id)
             try:
@@ -173,5 +184,5 @@ class FcmService(QObject):
                 log.exception("failed to persist persistent_ids")
 
         data = notification.get("data", notification) if notification else {}
-        log.debug("PUSH data payload -> %r", dict(data))
+        log.debug("PUSH data keys -> %r", list(data))
         self.push_received.emit(dict(data))

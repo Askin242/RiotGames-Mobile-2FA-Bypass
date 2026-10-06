@@ -2,5 +2,6 @@ PyQt6
 patchright
 requests
 firebase-messaging>=0.4.5
+aiohttp>=3.9.3
 opencv-python
 numpy

@@ -9,7 +9,10 @@ dist/
 dist_debug/
 build/obf/
 build/_work/
-build/_work_debug/
+build/_work_debug*/
+build/_work_release*/
+build/smoke_debug*/
+build/smoke_release*/
 build/version_info.txt
 *.spec.bak
 

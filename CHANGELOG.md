@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The section whose
 heading matches a release tag (e.g. `## v2.1.1`) is used as that release's notes,
 with GitHub's auto-generated commit list appended below it.
 
+## v2.1.5
+
+### Fixed
+- Fresh push registration now sends the Android app identity required by the
+  restricted Firebase key, so new devices can receive login approvals.
+
 ## v2.1.4
 
 ### Added
