@@ -7,6 +7,7 @@ from PyQt6.QtGui import QIcon
 from app.styles import load_stylesheet
 from app.core.paths import resource_path
 from app.core import debug_log
+from app.core.single_instance import SingleInstance
 from app.ui import MainWindow
 
 ICON_PATH = resource_path(os.path.join("images", "icon.png"))
@@ -36,10 +37,18 @@ def main():
         )
     _set_app_id()
     app = QApplication(sys.argv)
+    instance = SingleInstance()
+    if not instance.acquire():
+        # Already running (often hidden in the tray): bring that copy up instead.
+        instance.activate_existing()
+        sys.exit(0)
+    instance.listen()
+    app.aboutToQuit.connect(instance.close)
     app.setStyle("Fusion")
     app.setStyleSheet(load_stylesheet())
     app.setWindowIcon(QIcon(ICON_PATH))
     app.setQuitOnLastWindowClosed(False)
     win = MainWindow()
+    instance.activation_requested.connect(win._show_from_tray)
     win.show()
     sys.exit(app.exec())

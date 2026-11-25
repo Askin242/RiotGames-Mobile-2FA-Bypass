@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The section whose
 heading matches a release tag (e.g. `## v2.1.1`) is used as that release's notes,
 with GitHub's auto-generated commit list appended below it.
 
+## v2.1.6
+
+### Fixed
+- Opening the app while it's already running in the tray now brings up the
+  running window instead of starting a second copy with its own tray icon.
+
 ## v2.1.5
 
 ### Fixed
